@@ -1,3 +1,4 @@
+// Day view: hourly timeline with event cards
 part of '../schedule_test_page.dart';
 
 class _DayView extends StatelessWidget {
