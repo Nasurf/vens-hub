@@ -1,3 +1,4 @@
+// Study page: textbooks, theory questions, problem sets
 import 'package:flutter/material.dart';
 import 'package:vens_hub/presentation/screens/study/study_page.desktop.dart';
 import 'package:vens_hub/presentation/screens/study/study_page.mobile.dart';
