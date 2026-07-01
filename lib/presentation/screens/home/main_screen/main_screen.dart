@@ -1,3 +1,4 @@
+// Main screen: bottom nav + sidebar routing
 import 'package:flutter/material.dart';
 // import 'package:get/get.dart';
 // import 'package:vens_hub/presentation/blocs/home/home_controller.dart';

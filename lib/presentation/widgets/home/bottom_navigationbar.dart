@@ -1,3 +1,4 @@
+// Bottom navigation bar with adaptive behavior
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:vens_hub/presentation/blocs/home/home_controller.dart';
