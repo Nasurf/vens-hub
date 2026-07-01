@@ -1,3 +1,4 @@
+// Onboarding: welcome flow with feature showcase
 import 'package:flutter/material.dart';
 import 'package:vens_hub/presentation/screens/onboarding/onboarding_page.desktop.dart';
 import 'package:vens_hub/presentation/screens/onboarding/onboarding_page.mobile.dart';

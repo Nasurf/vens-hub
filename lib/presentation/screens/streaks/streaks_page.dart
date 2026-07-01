@@ -1,3 +1,4 @@
+// Streaks page: daily learning streak tracking with calendar view
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
