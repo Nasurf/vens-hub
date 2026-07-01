@@ -80,3 +80,4 @@ GoogleService-Info.plist
 # Service accounts
 *-service-account*.json
 *-credentials*.json
+lib/firebase_options.dart
