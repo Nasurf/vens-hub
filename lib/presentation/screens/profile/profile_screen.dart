@@ -1,3 +1,4 @@
+// Profile screen: user info, settings, and account management
 import 'package:flutter/material.dart';
 import 'package:vens_hub/presentation/screens/profile/profile_screen.desktop.dart';
 import 'package:vens_hub/presentation/screens/profile/profile_screen.mobile.dart';
