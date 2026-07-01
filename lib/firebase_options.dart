@@ -53,9 +53,9 @@ class DefaultFirebaseOptions {
     apiKey: 'AIzaSyBYjtxZBw1dXrHKKPUdJhxTU7LpCPqnFj4',
     appId: '1:246446465737:web:efccc7a8443c9e769fa318',
     messagingSenderId: '246446465737',
-    projectId: 'engineering-hub-7e5e1',
-    authDomain: 'engineering-hub-7e5e1.firebaseapp.com',
-    storageBucket: 'engineering-hub-7e5e1.firebasestorage.app',
+    projectId: 'vens-hub-firebase',
+    authDomain: 'vens-hub-firebase.firebaseapp.com',
+    storageBucket: 'vens-hub-firebase.firebasestorage.app',
     measurementId: 'G-3BL4N0HRDV',
   );
 
@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     apiKey: 'AIzaSyDblNUnMo0QrquQCs4reR4BYWCJoUgjp2Q',
     appId: '1:246446465737:android:76fe08fbba1453639fa318',
     messagingSenderId: '246446465737',
-    projectId: 'engineering-hub-7e5e1',
-    storageBucket: 'engineering-hub-7e5e1.firebasestorage.app',
+    projectId: 'vens-hub-firebase',
+    storageBucket: 'vens-hub-firebase.firebasestorage.app',
   );
 }
