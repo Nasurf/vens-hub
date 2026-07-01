@@ -1,3 +1,4 @@
+// AI assistant modal: chat overlay for study help
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:vens_hub/core/services/ai/gemini_client.dart';
