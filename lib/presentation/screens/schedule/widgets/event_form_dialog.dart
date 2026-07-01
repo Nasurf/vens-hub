@@ -1,3 +1,4 @@
+// Event form dialog for creating and editing schedule events
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:vens_hub/data/models/timetable_model.dart';

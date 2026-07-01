@@ -1,3 +1,4 @@
+// Week view: 7-day calendar grid
 part of '../schedule_test_page.dart';
 
 class _WeekView extends StatelessWidget {
