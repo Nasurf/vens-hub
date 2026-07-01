@@ -1,0 +1,1705 @@
+import 'dart:developer';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'dart:async';
+import 'package:vens_hub/core/Brain/data_formatting.dart' as df;
+import 'package:vens_hub/core/Brain/latex_support.dart';
+import 'package:vens_hub/presentation/widgets/common/report_issue_dialog.dart';
+import 'package:vens_hub/core/services/gemini.dart'; // Keep for evaluation
+import 'package:vens_hub/core/error/exceptions.dart';
+import 'package:vens_hub/data/models/answer_feedback_model.dart';
+import 'package:vens_hub/data/models/question_model.dart';
+import 'package:vens_hub/presentation/blocs/quiz/quiz_bloc.dart';
+import 'package:vens_hub/presentation/blocs/quiz/quiz_event.dart';
+import 'package:vens_hub/presentation/blocs/quiz/quiz_state.dart';
+import 'package:vens_hub/presentation/widgets/feedback_dialog.dart';
+// import 'package:vens_hub/core/routes/router.dart';
+// import 'package:vens_hub/core/routes/routes_name.dart';
+import 'package:vens_hub/core/constants/constants.dart';
+import 'package:vens_hub/presentation/screens/quiz/CompletionScreen/completion_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:vens_hub/presentation/widgets/common/app_notification.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+// import 'dart:ui';
+
+class TheoryQuizScreen extends StatefulWidget {
+  const TheoryQuizScreen({super.key});
+
+  @override
+  State<TheoryQuizScreen> createState() => _TheoryQuizScreenState();
+}
+
+class _TheoryQuizScreenState extends State<TheoryQuizScreen> {
+  final TextEditingController _answerController = TextEditingController();
+  final FocusNode _answerFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+
+  // Keep GeminiApi here for answer evaluation specifically
+  late final GeminiApi _geminiApi;
+  bool _isEvaluating = false;
+  bool _isSubmitted = false;
+  String? _errorMessage;
+  AnswerFeedback? _currentFeedback;
+  // Countdown state
+  DateTime? _countdownEnd;
+  int _remainingSeconds = 0;
+  bool _timerExpiredShown = false;
+  Timer? _timer;
+  // Track last timer inputs so we only (re)start when they actually change
+  DateTime? _lastStartedAt;
+  int? _lastTheoryMinutes;
+  bool? _lastIsTheoryTimed;
+
+  // -- New State Variables for Image Picker UI --
+  final ImagePicker _picker = ImagePicker();
+  final GlobalKey _addButtonKey = GlobalKey();
+  OverlayEntry? _menuOverlay;
+  bool _isAddingImage = false;
+  // bool _isMenuHovered = false; // hover state not currently used
+  // -- End of New State Variables --
+
+  // Image-related state (bytes used cross-platform for web compatibility)
+  final List<Uint8List> _selectedImageBytes = [];
+  // bool _showImageCapture = false; // reserved for future camera capture UI
+
+  // Questions will be managed by the QuizBloc state
+
+  @override
+  void initState() {
+    super.initState();
+    _geminiApi = GeminiApi(modelType: "gemini-2.5-flash-lite");
+    // Questions are now loaded by the QuizBloc before navigating here
+    // No need to call _generateTheoryQuestions()
+
+    // Initialize countdown once with current bloc state after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = context.read<QuizBloc>().state;
+      _lastStartedAt = state.startedAt;
+      _lastTheoryMinutes = state.theoryTimeMinutes;
+      _lastIsTheoryTimed = state.isTheoryTimed;
+      _initCountdownIfNeeded(state);
+    });
+  }
+
+  @override
+  void dispose() {
+    _answerController.dispose();
+    _answerFocusNode.dispose();
+    _scrollController.dispose();
+    // Ensure the overlay is removed when the widget is disposed (avoid setState in dispose)
+    if (_menuOverlay != null) {
+      _menuOverlay!.remove();
+      _menuOverlay = null;
+    }
+    _isAddingImage = false;
+    _timer?.cancel();
+    // Reset the quiz-specific state so background generation/logs stop
+    try {
+      context.read<QuizBloc>().add(const ResetQuiz());
+    } catch (_) {
+      // ignore: context might be gone during app shutdown
+    }
+    super.dispose();
+  }
+
+  // Removed _generateTheoryQuestions method
+
+  @override
+  Widget build(BuildContext context) {
+    // Listen to QuizBloc state for loading, questions, and current index
+    return BlocConsumer<QuizBloc, QuizState>(
+      listener: (context, state) {
+        // Optionally listen for state changes if needed, e.g., navigation after completion
+        if (!state.isLoading &&
+            state.allQuestions.isEmpty &&
+            state.questionType == QuestionType.theory) {
+          // Handle case where no theory questions were generated by the Brain
+          // Avoid setState during build by deferring to next frame
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _errorMessage =
+                  'Failed to load theory questions for this topic/difficulty.';
+            });
+          });
+          log("Bloc listener: No theory questions loaded.");
+        }
+
+        // Countdown wiring: only react when related values change.
+        final bool timingChanged =
+            _lastStartedAt != state.startedAt ||
+            _lastTheoryMinutes != state.theoryTimeMinutes ||
+            _lastIsTheoryTimed != state.isTheoryTimed;
+
+        if (timingChanged) {
+          _lastStartedAt = state.startedAt;
+          _lastTheoryMinutes = state.theoryTimeMinutes;
+          _lastIsTheoryTimed = state.isTheoryTimed;
+
+          // Defer so we never call setState inside the same frame as a bloc emit
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _initCountdownIfNeeded(state);
+          });
+        }
+      },
+      builder: (context, state) {
+        // Pure UI build; no state changes here
+        // Access theory questions from the bloc state
+        final List<df.TheoryQuestion> theoryQuestions =
+            state.allQuestions
+                .whereType<
+                  df.TheoryQuestion
+                >() // Filter for TheoryQuestion type
+                .toList();
+
+        final int currentQuestionIndex = state.currentQuestionIndex;
+
+        // Handle loading state from the Bloc. Show loading if isLoading is true,
+        // and there are no questions yet to display.
+        if (state.isLoading && theoryQuestions.isEmpty) {
+          return Scaffold(
+            appBar: _buildStyledAppBar(state),
+            body: Align(
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SpinKitPulsingGrid(
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 50,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Generating question ${state.allQuestions.length + 1} of ${state.numberOfQuestions}...',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Handle error or empty questions list when not loading
+        if (!state.isLoading && theoryQuestions.isEmpty) {
+          return Scaffold(
+            appBar: _buildStyledAppBar(state),
+            body: _buildErrorScreen(
+              _errorMessage ??
+                  'Failed to generate questions. Please go back and try again.',
+            ),
+          );
+        }
+
+        // This check prevents crashes if the UI builds while a new question is loading.
+        if (currentQuestionIndex >= theoryQuestions.length) {
+          // This can happen briefly while the next question is being generated.
+          // We show a loading screen.
+          return Scaffold(
+            appBar: _buildStyledAppBar(state),
+            body: Align(
+              alignment: Alignment.center,
+              child: SpinKitPulsingGrid(
+                color: Theme.of(context).colorScheme.primary,
+                size: 50,
+              ),
+            ),
+          );
+        }
+
+        final df.TheoryQuestion currentQuestion =
+            theoryQuestions[currentQuestionIndex];
+
+        return Scaffold(
+          appBar: _buildStyledAppBar(state),
+          bottomNavigationBar: _buildBottomSection(
+            context,
+            state,
+            theoryQuestions,
+          ),
+          body: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(16.0),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1000),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTopicCard(state),
+                    const SizedBox(height: 20),
+                    Stack(
+                      children: [
+                        _buildQuestionCard(currentQuestion),
+                        if (state.isLoading)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Align(
+                                alignment: Alignment.center,
+                                child: SpinKitPulsingGrid(
+                                  color: Colors.white,
+                                  size: 50.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    _buildAnswerInputSection(currentQuestion),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      _buildErrorMessage(),
+                    ],
+                    if (_currentFeedback != null && _isSubmitted) ...[
+                      const SizedBox(height: 20),
+                      _buildInlineFeedback(),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Updated to accept message parameter
+  Widget _buildErrorScreen(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 60,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message, // Use passed message
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Go Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopicCard(QuizState state) {
+    // Question counter
+    final questionNumber = state.currentQuestionIndex + 1;
+    final totalQuestions = state.numberOfQuestions ?? 0;
+
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.topic, color: theme.colorScheme.primary, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Topic: ${state.choosenTopic}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Difficulty: ${state.difficulty?.name.toUpperCase() ?? 'N/A'}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: _getDifficultyColor(
+                        state.difficulty?.name ?? 'easy',
+                      ),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (state.isTheoryTimed == true &&
+                      state.theoryTimeMinutes != null) ...[
+                    const SizedBox(height: 6),
+                    _buildCountdownPill(theme),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Q: $questionNumber/$totalQuestions',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCountdownPill(ThemeData theme) {
+    final text = _formatDuration(_remainingSeconds);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SvgPicture.asset(
+            'assets/svg/stopwatch_1.svg',
+            height: 18,
+            // colorFilter: ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Updated to accept the current TheoryQuestion
+  Widget _buildQuestionCard(df.TheoryQuestion question) {
+    // Pre-process the question string to handle newlines correctly.
+    final formattedQuestion = question.question.replaceAll(
+      RegExp(r'\\n'),
+      '\n',
+    );
+
+    // uhh this does decide whether we are dealing with a calculation or theory question and sets icon & title accordingly
+    final bool isCalc = _isCalculationQuestion(question);
+    late final IconData leadingIcon;
+    late final String cardTitle;
+    if (isCalc) {
+      leadingIcon = Icons.calculate;
+      cardTitle = 'Calculation Problem';
+    } else {
+      leadingIcon = Icons.lightbulb_outline;
+      cardTitle = 'Theory Question';
+    }
+
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(leadingIcon, color: theme.colorScheme.primary, size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    cardTitle,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'More',
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  onPressed: () async {
+                    final selected = await showMenu<int>(
+                      context: context,
+                      position: const RelativeRect.fromLTRB(1000, 80, 16, 0),
+                      items: const [
+                        PopupMenuItem<int>(
+                          value: 1,
+                          child: Text('Report issue'),
+                        ),
+                      ],
+                    );
+                    if (!mounted) return;
+                    if (selected == 1) {
+                      await showReportIssueDialog(
+                        context,
+                        payload: ReportIssuePayload(
+                          questionType: isCalc ? 'calculation' : 'theory',
+                          questionText: formattedQuestion,
+                          courseName: question.courseName,
+                          topic: question.topic,
+                          difficulty: question.difficulty,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FormattedMathText(
+              content: formattedQuestion,
+              textStyle: theme.textTheme.bodyLarge?.copyWith(
+                height: 1.5,
+                fontSize: 16,
+              ),
+            ),
+            if (question.keyConcepts.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Key concepts to address:',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children:
+                    question.keyConcepts
+                        .map(
+                          (concept) => Chip(
+                            label: FormattedMathText(
+                              content: concept,
+                              textStyle: TextStyle(fontSize: 12),
+                            ),
+                            backgroundColor:
+                                theme.colorScheme.secondaryContainer,
+                            labelStyle: TextStyle(
+                              color: theme.colorScheme.onSecondaryContainer,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Updated to accept the current TheoryQuestion
+  Widget _buildAnswerInputSection(df.TheoryQuestion question) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your Answer',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                TextField(
+                  controller: _answerController,
+                  focusNode: _answerFocusNode,
+                  maxLines: 8,
+                  enabled: !_isSubmitted,
+                  decoration: InputDecoration(
+                    hintText:
+                        question.questionType.toLowerCase() == 'calculation'
+                            ? 'Show your work step by step...For calculations, include: Given values, Formulas used, Step-by-step solution, Final answer with units'
+                            : 'Brief answer, Main ideas, Examples relevant to the question',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: theme.colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor:
+                        _isSubmitted
+                            ? theme.colorScheme.surfaceContainerHighest
+                            : theme.colorScheme.surface,
+                  ),
+                  textInputAction: TextInputAction.newline,
+                  style: theme.textTheme.bodyLarge,
+                ),
+                if (!_isSubmitted)
+                  Positioned(
+                    bottom: 8,
+                    left: 8,
+                    child: Material(
+                      key: _addButtonKey,
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(20),
+                      elevation: 4,
+                      child: InkWell(
+                        onTap: _toggleImageMenu,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            transitionBuilder: (child, animation) {
+                              return ScaleTransition(
+                                scale: animation,
+                                child: child,
+                              );
+                            },
+                            child: Icon(
+                              _isAddingImage ? Icons.close : Icons.add,
+                              key: ValueKey<bool>(_isAddingImage),
+                              color: theme.colorScheme.onPrimary,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (!_isSubmitted && _selectedImageBytes.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildImagePreviews(),
+            ],
+            if (_isSubmitted && _selectedImageBytes.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Submitted Images:',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 100,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _selectedImageBytes.length,
+                  itemBuilder: (context, index) {
+                    return Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          _selectedImageBytes[index],
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+            if (_isSubmitted)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Answer submitted',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImagePreviews() {
+    final imageCount = _selectedImageBytes.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: SizedBox(
+        height: 110,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: imageCount,
+          itemBuilder: (context, index) {
+            return Container(
+              margin: const EdgeInsets.only(right: 12),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(
+                      _selectedImageBytes[index],
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: () => _removeImage(index),
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.red,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineFeedback() {
+    if (_currentFeedback == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  _getRatingIcon(_currentFeedback!.rating),
+                  color: _getRatingColor(_currentFeedback!.rating),
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Rating: ${_currentFeedback!.rating}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: _getRatingColor(_currentFeedback!.rating),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            FormattedMathText(
+              content: _currentFeedback!.overallFeedback,
+              textStyle: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorMessage() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.error,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.error_outline,
+            color: Theme.of(context).colorScheme.error,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomSection(
+    BuildContext context,
+    QuizState state,
+    List<df.TheoryQuestion> theoryQuestions,
+  ) {
+    final int currentIndex = state.currentQuestionIndex;
+    final int totalCount = state.numberOfQuestions ?? theoryQuestions.length;
+
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const double maxContentWidth = 880;
+          final double contentWidth =
+              constraints.maxWidth < maxContentWidth
+                  ? constraints.maxWidth
+                  : maxContentWidth;
+
+          return Row(
+            children: [
+              if (constraints.maxWidth > contentWidth) const Spacer(),
+              SizedBox(
+                width: contentWidth,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (!_isSubmitted) ...[
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _isEvaluating ? null : _clearAnswer,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('Clear'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed:
+                              _isEvaluating || state.isLoading
+                                  ? null
+                                  : () => _submitAnswer(
+                                    context,
+                                    state,
+                                    theoryQuestions,
+                                  ),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child:
+                              _isEvaluating
+                                  ? SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color:
+                                          Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimary,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : state.isLoading
+                                  ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.0,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                  : const Text('Submit Answer'),
+                        ),
+                      ),
+                    ] else ...[
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _showDetailedFeedback,
+                          child: const Text('View Feedback'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      if (currentIndex < totalCount - 1) ...[
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed:
+                                state.isLoading
+                                    ? null
+                                    : () => _nextQuestion(context),
+                            child:
+                                state.isLoading
+                                    ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.0,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                    : const Text('Next Question'),
+                          ),
+                        ),
+                      ] else ...[
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: () => _finishQuiz(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.error,
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.onError,
+                            ),
+                            child: const Text('Finish Quiz'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+              if (constraints.maxWidth > contentWidth) const Spacer(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _clearAnswer() {
+    setState(() {
+      _answerController.clear();
+      _errorMessage = null;
+      _selectedImageBytes.clear();
+      // _showImageCapture = false;
+    });
+  }
+
+  Future<void> _submitAnswer(
+    BuildContext context,
+    QuizState quizState,
+    List<df.TheoryQuestion> theoryQuestions,
+  ) async {
+    final int currentQuestionIndex = quizState.currentQuestionIndex;
+    final answer = _answerController.text.trim();
+
+    // Check if user provided either text or images
+    if (answer.isEmpty && _selectedImageBytes.isEmpty) {
+      setState(() {
+        _errorMessage =
+            'Please provide an answer (text or images) before submitting.';
+      });
+      return;
+    }
+
+    // If only text is provided, ensure it's detailed enough
+    if (answer.isNotEmpty &&
+        answer.length < 10 &&
+        _selectedImageBytes.isEmpty) {
+      setState(() {
+        _errorMessage =
+            'Please provide a more detailed answer (at least 10 characters) or add images.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isEvaluating = true;
+      _errorMessage = null;
+    });
+
+    try {
+      if (currentQuestionIndex >= theoryQuestions.length ||
+          theoryQuestions.isEmpty) {
+        setState(() {
+          _isEvaluating = false;
+          _errorMessage = "Error: Invalid question index.";
+        });
+        log(
+          "Error: Invalid question index in _submitAnswer. Index: $currentQuestionIndex, Length: ${theoryQuestions.length}",
+        );
+        return;
+      }
+      final df.TheoryQuestion currentQuestion =
+          theoryQuestions[currentQuestionIndex];
+
+      final Question questionToEvaluate = Question(
+        id:
+            '${currentQuestion.question.hashCode}-${currentQuestion.topic.hashCode}',
+        type: currentQuestion.questionType.toLowerCase(),
+        text: currentQuestion.question,
+        subject: currentQuestion.courseName,
+        correctAnswerSummary: currentQuestion.sampleAnswer,
+        solutionSteps: currentQuestion.markingCriteria,
+        isCalculationQuestion:
+            currentQuestion.questionType.toLowerCase() == 'calculation',
+      );
+
+      // Use appropriate evaluation method based on whether images are included
+      final AnswerFeedback feedback;
+      if (_selectedImageBytes.isNotEmpty) {
+        feedback = await _geminiApi.evaluateTheoryAnswerWithImageBytes(
+          questionToEvaluate,
+          answer,
+          _selectedImageBytes,
+        );
+      } else {
+        feedback = await _geminiApi.evaluateTheoryAnswer(
+          questionToEvaluate,
+          answer,
+        );
+      }
+
+      if (!mounted) return; // User may have navigated away during evaluation
+      setState(() {
+        _isEvaluating = false;
+        _isSubmitted = true;
+        _currentFeedback = feedback;
+      });
+
+      _answerFocusNode.unfocus();
+    } catch (e) {
+      log('Error evaluating answer: $e');
+      if (!mounted) return;
+      setState(() {
+        _isEvaluating = false;
+        if (e is AIServiceException) {
+          _errorMessage = 'AI Service Error: ${e.message}';
+        } else {
+          _errorMessage = 'Failed to evaluate answer. Please try again.';
+        }
+      });
+    }
+  }
+
+  void _nextQuestion(BuildContext context) {
+    // Dispatch the event. The BLoC will handle the logic of generating a new question
+    // or simply moving to the next one.
+    context.read<QuizBloc>().add(const NextQuestion());
+
+    // Reset UI state for the new question
+    setState(() {
+      _isSubmitted = false;
+      _currentFeedback = null;
+      _answerController.clear();
+      _errorMessage = null;
+      _selectedImageBytes.clear();
+      // _showImageCapture = false;
+    });
+
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _showDetailedFeedback() {
+    if (_currentFeedback != null) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => FeedbackDialog(feedback: _currentFeedback!),
+      );
+    }
+  }
+
+  void _finishQuiz(BuildContext context) {
+    final quizState = context.read<QuizBloc>().state;
+    final int numOfCorrectAnswers = quizState.numOfCorrectAnswers;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => CompletionPage(
+              numOfQuestions: quizState.allQuestions.length,
+              numOfCorrectAnswers: numOfCorrectAnswers,
+            ),
+      ),
+    );
+  }
+
+  Color _getDifficultyColor(String difficulty) {
+    switch (difficulty.toLowerCase()) {
+      case 'easy':
+        return Colors.green;
+      case 'medium':
+        return Colors.orange;
+      case 'hard':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color _getRatingColor(String rating) {
+    switch (rating) {
+      case 'Excellent':
+        return Colors.green;
+      case 'Good':
+        return Colors.lightGreen;
+      case 'Satisfactory':
+        return Colors.orange;
+      case 'Needs Improvement':
+        return Colors.amber;
+      case 'Incorrect':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getRatingIcon(String rating) {
+    switch (rating) {
+      case 'Excellent':
+        return Icons.star;
+      case 'Good':
+        return Icons.thumb_up;
+      case 'Satisfactory':
+        return Icons.thumbs_up_down;
+      case 'Needs Improvement':
+        return Icons.thumb_down;
+      case 'Incorrect':
+        return Icons.close;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  // -- Methods for the new Image Picker UI --
+
+  Future<void> _requestCameraPermission() async {
+    if (kIsWeb) return; // Web handles permissions differently
+
+    // Request camera permission on supported platforms (handler packages gate per-platform internally)
+    final status = await Permission.camera.status;
+    if (!status.isGranted) {
+      final result = await Permission.camera.request();
+      if (!result.isGranted && mounted) {
+        AppNotifier.warning(
+          context: context,
+          message: 'Camera permission is required to take a photo',
+        );
+      }
+    }
+  }
+
+  Future<void> _requestGalleryPermission() async {
+    if (kIsWeb) return; // Web handles permissions differently
+
+    // Request photo library/media permission where applicable
+    final status = await Permission.photos.status;
+    if (!status.isGranted) {
+      final result = await Permission.photos.request();
+      if (!result.isGranted && mounted) {
+        AppNotifier.warning(
+          context: context,
+          message: 'Photo library permission is required to select images',
+        );
+      }
+    }
+  }
+
+  Future<void> _captureImage() async {
+    await _requestCameraPermission();
+
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85, // Compress to reduce size
+      );
+
+      if (photo != null) {
+        final bytes = await photo.readAsBytes();
+        if (!mounted) return;
+        setState(() {
+          _selectedImageBytes.add(bytes);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        AppNotifier.error(
+          context: context,
+          message: 'Failed to capture image: $e',
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    if (kIsWeb) {
+      // Use file_picker for web
+      try {
+        FilePickerResult? result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: false,
+          withData: true, // Important for web
+        );
+
+        if (result != null && result.files.isNotEmpty) {
+          final file = result.files.first;
+          if (file.bytes != null) {
+            if (!mounted) return;
+            setState(() {
+              _selectedImageBytes.add(file.bytes!);
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          AppNotifier.error(
+            context: context,
+            message: 'Failed to pick image: $e',
+          );
+        }
+      }
+    } else {
+      // Use image_picker for mobile; read bytes to keep cross-platform behavior consistent
+      await _requestGalleryPermission();
+
+      try {
+        final XFile? image = await _picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 85,
+        );
+
+        if (image != null) {
+          final bytes = await image.readAsBytes();
+          if (!mounted) return;
+          setState(() {
+            _selectedImageBytes.add(bytes);
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          AppNotifier.error(
+            context: context,
+            message: 'Failed to pick image: $e',
+          );
+        }
+      }
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImageBytes.removeAt(index);
+    });
+  }
+
+  void _toggleImageMenu() {
+    if (_isAddingImage) {
+      _closeImageMenu();
+    } else {
+      _openImageMenu();
+    }
+  }
+
+  void _openImageMenu() {
+    final RenderBox renderBox =
+        _addButtonKey.currentContext!.findRenderObject() as RenderBox;
+    // final size = renderBox.size; // not currently used
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    _menuOverlay = OverlayEntry(
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isLight = theme.brightness == Brightness.light;
+        final Color popupBg =
+            isLight
+                ? theme.colorScheme.surface
+                : Colors.black.withValues(alpha: 0.9);
+        final Color popupBorder = theme.colorScheme.onSurface.withValues(
+          alpha: isLight ? 0.12 : 0.20,
+        );
+        final Color popupGlow = theme.colorScheme.shadow.withValues(alpha: 0.2);
+
+        return Stack(
+          children: [
+            // Full-screen GestureDetector to close the menu on tap outside
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _closeImageMenu,
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            // The squircle-styled popup
+            Positioned(
+              left: offset.dx,
+              bottom:
+                  MediaQuery.of(context).size.height -
+                  offset.dy +
+                  8, // Position above the button
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(
+                  24.0,
+                ), // Smoother, larger radius
+                child: MouseRegion(
+                  // onEnter: (_) => setState(() => _isMenuHovered = true),
+                  // onExit: (_) => setState(() => _isMenuHovered = false),
+                  child: Container(
+                    width: 220,
+                    height: 150,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: popupBg,
+                      borderRadius: BorderRadius.circular(24.0),
+                      border: Border.all(color: popupBorder, width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: popupGlow,
+                          blurRadius: 12,
+                          spreadRadius: 4.0,
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment:
+                            MainAxisAlignment
+                                .spaceEvenly, // Distribute space to prevent overflow
+                        children: [
+                          _buildMenuOption(
+                            context,
+                            icon: Icons.camera_alt_outlined,
+                            text: 'Take Photo',
+                            onTap: () {
+                              _closeImageMenu();
+                              _captureImage();
+                            },
+                          ),
+                          _buildMenuOption(
+                            context,
+                            icon: Icons.photo_library_outlined,
+                            text: 'Choose from Gallery',
+                            onTap: () {
+                              _closeImageMenu();
+                              _pickImage();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_menuOverlay!);
+    setState(() {
+      _isAddingImage = true;
+      // _isMenuHovered = false;
+    });
+  }
+
+  void _closeImageMenu() {
+    if (_menuOverlay != null) {
+      _menuOverlay!.remove();
+      _menuOverlay = null;
+    }
+    if (mounted) {
+      setState(() {
+        _isAddingImage = false;
+        // _isMenuHovered = false;
+      });
+    } else {
+      _isAddingImage = false;
+    }
+  }
+
+  Widget _buildMenuOption(
+    BuildContext context, {
+    required IconData icon,
+    required String text,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final Color textColor =
+        isLight ? theme.colorScheme.onSurface : Colors.white;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16), // Add ripple effect radius
+      child: SizedBox(
+        width: 220, // Match pop-up container width
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 10,
+          ), // Adjust padding
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 24, color: textColor), // Slightly larger icon
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  text,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                  ), // Bolder text
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // -- End of Methods for new Image Picker UI --
+
+  // uhh this figures out what should be written on the AppBar based on the bloc state
+  String _getScreenTitle(QuizState state) {
+    if (state.choosenTopic != null && state.choosenTopic!.isNotEmpty) {
+      return state.choosenTopic!;
+    } else if (state.course.isNotEmpty) {
+      return state.course;
+    } else {
+      return 'Theory Quiz';
+    }
+  }
+
+  // Styled app bar matching the quiz customization header aesthetics (compact)
+  PreferredSizeWidget _buildStyledAppBar(QuizState state) {
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final borderColor = theme.colorScheme.onSurface.withValues(
+      alpha: isLight ? 0.06 : 0.12,
+    );
+    final headerMidColor = _computeHeaderMidColor(theme);
+
+    return AppBar(
+      backgroundColor: theme.colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: false,
+      automaticallyImplyLeading: false,
+      title: null,
+      flexibleSpace: LayoutBuilder(
+        builder: (context, constraints) {
+          return SafeArea(
+            top: true,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: headerMidColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: borderColor, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.colorScheme.shadow.withValues(
+                            alpha: 0.20,
+                          ),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              CupertinoIcons.back,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              _getScreenTitle(state),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Color _computeHeaderMidColor(ThemeData theme) {
+    final isLight = theme.brightness == Brightness.light;
+    final primary = theme.colorScheme.primary;
+    final surface = theme.colorScheme.surface;
+    final double a0 = isLight ? 0.18 : 0.12; // start alpha of old gradient
+    final double r0 = primary.r,
+        g0 = primary.g,
+        b0 = primary.b; // normalized 0..1
+    final double r1 = surface.r,
+        g1 = surface.g,
+        b1 = surface.b; // normalized 0..1
+    const double a1 = 1.0; // end alpha (surface is opaque)
+    final double aMid = (a0 + a1) / 2.0;
+    final double rPre = (a0 * r0 + a1 * r1) / 2.0;
+    final double gPre = (a0 * g0 + a1 * g1) / 2.0;
+    final double bPre = (a0 * b0 + a1 * b1) / 2.0;
+    final double rComp = rPre + (1.0 - aMid) * r1;
+    final double gComp = gPre + (1.0 - aMid) * g1;
+    final double bComp = bPre + (1.0 - aMid) * b1;
+    return Color.fromARGB(
+      255,
+      (rComp * 255.0).round(),
+      (gComp * 255.0).round(),
+      (bComp * 255.0).round(),
+    );
+  }
+
+  // uhh this checks if the current theory question is a calculation type question
+  bool _isCalculationQuestion(df.TheoryQuestion question) {
+    return question.questionType.toLowerCase() == 'calculation';
+  }
+
+  void _initCountdownIfNeeded(QuizState state) {
+    if (state.isTheoryTimed == true &&
+        state.theoryTimeMinutes != null &&
+        state.startedAt != null) {
+      final end = state.startedAt!.add(
+        Duration(minutes: state.theoryTimeMinutes!),
+      );
+      if (_countdownEnd != end) {
+        _countdownEnd = end;
+        _timerExpiredShown = false;
+        _startTicker();
+      }
+      _updateRemaining();
+    } else {
+      // Not timed or missing info
+      _countdownEnd = null;
+      _remainingSeconds = 0;
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  void _startTicker() {
+    _timer?.cancel();
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updateRemaining(),
+    );
+  }
+
+  void _updateRemaining() {
+    if (_countdownEnd == null) return;
+    final now = DateTime.now();
+    final diff = _countdownEnd!.difference(now).inSeconds;
+    if (diff <= 0) {
+      if (!_timerExpiredShown) {
+        _timerExpiredShown = true;
+        if (mounted) {
+          setState(() => _remainingSeconds = 0);
+        } else {
+          _remainingSeconds = 0;
+        }
+        _timer?.cancel();
+        // Time up: navigate to completion
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            AppNotifier.warning(
+              context: context,
+              message: "Time's up! Submitting your answer.",
+            );
+            _autoSubmitAndFinish();
+          }
+        });
+      }
+      return;
+    }
+    if (diff != _remainingSeconds) {
+      if (mounted) {
+        setState(() => _remainingSeconds = diff);
+      } else {
+        _remainingSeconds = diff;
+      }
+    }
+  }
+
+  Future<void> _autoSubmitAndFinish() async {
+    try {
+      if (!_isSubmitted) {
+        final quizState = context.read<QuizBloc>().state;
+        final List<df.TheoryQuestion> theoryQuestions =
+            quizState.allQuestions.whereType<df.TheoryQuestion>().toList();
+        final hasContent =
+            _answerController.text.trim().isNotEmpty ||
+            _selectedImageBytes.isNotEmpty;
+        if (hasContent && theoryQuestions.isNotEmpty) {
+          await _submitAnswer(context, quizState, theoryQuestions);
+        }
+      }
+    } catch (_) {
+      // ignore errors during auto-submit
+    } finally {
+      if (mounted) {
+        _finishQuiz(context);
+      }
+    }
+  }
+
+  String _formatDuration(int seconds) {
+    if (seconds <= 0) return '00:00';
+    final m = (seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+}
