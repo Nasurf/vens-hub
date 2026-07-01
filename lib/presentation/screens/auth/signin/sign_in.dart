@@ -1,3 +1,4 @@
+// Auth flow: signin, signup, email verification, forgot password, Google SSO
 import 'package:flutter/material.dart';
 import 'package:vens_hub/presentation/screens/auth/signin/signin.desktop.dart';
 import 'package:vens_hub/presentation/screens/auth/signin/signin.mobile.dart';

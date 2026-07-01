@@ -1,3 +1,4 @@
+// Auth flow: adaptive signup with form validation
 import 'package:flutter/material.dart';
 import 'package:vens_hub/presentation/screens/auth/signup/signup.desktop.dart';
 import 'package:vens_hub/presentation/screens/auth/signup/signup.mobile.dart';
