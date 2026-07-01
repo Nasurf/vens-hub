@@ -1,3 +1,4 @@
+// Auth flow: email verification with polling
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
