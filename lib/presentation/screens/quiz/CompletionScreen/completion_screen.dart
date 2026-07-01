@@ -1,3 +1,4 @@
+// Completion screen with confetti and score summary
 import 'package:vens_hub/presentation/screens/quiz/CompletionScreen/completionScreen.desktop.dart';
 import 'package:vens_hub/presentation/screens/quiz/CompletionScreen/completionScreen.mobile.dart';
 import 'package:vens_hub/presentation/widgets/common/app_layout.dart';

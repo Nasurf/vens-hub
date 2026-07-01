@@ -1,3 +1,4 @@
+// Multiple choice quiz with adaptive feedback
 import 'package:vens_hub/presentation/screens/quiz/MutipleChoice/multiple_choice_quiz_page.desktop.dart';
 import 'package:vens_hub/presentation/screens/quiz/MutipleChoice/multiple_choice_quiz_page.mobile.dart';
 import 'package:vens_hub/presentation/widgets/common/app_layout.dart';
