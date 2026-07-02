@@ -331,7 +331,18 @@ async function postJson<T>(baseUrl: string, path: string, body: unknown): Promis
 
 const api = {
   departments: () => fetchJson<{ departments: Department[] }>('/departments'),
-  courses: () => fetchJson<{ courses: Course[] }>('/courses'),
+  courses: (params: { q?: string; limit?: number; cursor?: number; department?: string; level?: string } = {}) => {
+    const searchParams = new URLSearchParams()
+    if (params.q) searchParams.set('q', params.q)
+    if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.cursor) searchParams.set('cursor', String(params.cursor))
+    if (params.department) searchParams.set('department', params.department)
+    if (params.level) searchParams.set('level', params.level)
+    const queryStr = searchParams.toString()
+    return fetchJson<{ courses: Course[]; total: number; hasMore: boolean; nextCursor: number }>(
+      `/courses${queryStr ? `?${queryStr}` : ''}`
+    )
+  },
   departmentCourses: (code: string, q?: string, limit?: number, cursor?: number) => {
     const params = new URLSearchParams({ limit: String(limit ?? 20), cursor: String(cursor ?? 0) })
     if (q) params.set('q', q)
@@ -1455,23 +1466,69 @@ function DashboardPage() {
 
 function CoursesPage() {
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [department, setDepartment] = useState('')
   const [level, setLevel] = useState('')
-  const courseState = useAsync('courses', api.courses)
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    return (courseState.data?.courses ?? []).filter((course) => {
-      const matchesQuery =
-        !normalized ||
-        course.code.toLowerCase().includes(normalized) ||
-        course.title.toLowerCase().includes(normalized) ||
-        course.description?.toLowerCase().includes(normalized)
-      const matchesDepartment = !department || course.department_code === department
-      const matchesLevel = !level || courseLevels(course).includes(level)
-      return matchesQuery && matchesDepartment && matchesLevel
-    })
-  }, [courseState.data?.courses, department, level, query])
+  const [courses, setCourses] = useState<Course[]>([])
+  const [total, setTotal] = useState(0)
+  const [cursor, setCursor] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // Debounce search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [query])
+
+  // Reset and fetch page 1 on search or filter change
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    setCursor(0)
+
+    api.courses({ q: debouncedQuery, department, level, limit: 20, cursor: 0 })
+      .then((data) => {
+        if (!active) return
+        setCourses(data.courses ?? [])
+        setTotal(data.total ?? 0)
+        setHasMore(data.hasMore ?? false)
+        setCursor(data.nextCursor ?? 0)
+        setLoading(false)
+      })
+      .catch((err: Error) => {
+        if (!active) return
+        setError(err.message)
+        setLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [debouncedQuery, department, level])
+
+  // Load more pages
+  const loadMore = () => {
+    if (loading || !hasMore) return
+    setLoading(true)
+    api.courses({ q: debouncedQuery, department, level, limit: 20, cursor })
+      .then((data) => {
+        setCourses((prev) => [...prev, ...(data.courses ?? [])])
+        setTotal(data.total ?? 0)
+        setHasMore(data.hasMore ?? false)
+        setCursor(data.nextCursor ?? 0)
+        setLoading(false)
+      })
+      .catch((err: Error) => {
+        setError(err.message)
+        setLoading(false)
+      })
+  }
 
   return (
     <div className="page-stack">
@@ -1498,17 +1555,32 @@ function CoursesPage() {
           ))}
         </select>
       </section>
-      {courseState.loading && <LoadingState label="Loading course catalog..." />}
-      {courseState.error && <ErrorState message={courseState.error} />}
-      {!courseState.loading && !courseState.error && (
+      
+      {error && <ErrorState message={error} />}
+
+      {courses.length === 0 && !loading && !error && (
+        <EmptyState icon={<GraduationCap />} title="No courses found" body="Try refining your search terms or filters." />
+      )}
+
+      {courses.length > 0 && (
         <>
-          <p className="result-count">Showing {filtered.length} of {courseState.data?.courses.length ?? 0} courses</p>
+          <p className="result-count">Showing {courses.length} of {total} courses</p>
           <div className="course-grid">
-            {filtered.map((course) => (
+            {courses.map((course) => (
               <CourseCard course={course} key={course.code} />
             ))}
           </div>
         </>
+      )}
+
+      {loading && <LoadingState label="Loading courses..." />}
+
+      {hasMore && !loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem' }}>
+          <button className="primary-button" onClick={loadMore}>
+            Load More
+          </button>
+        </div>
       )}
     </div>
   )
