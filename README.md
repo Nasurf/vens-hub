@@ -41,8 +41,19 @@ flutter run
 ### Worker deployment
 
 ```bash
+# Quick deploy
+./deploy.sh
+
+# Or manually
 cd workers/api
 npx wrangler deploy --env=""
+```
+
+### Configure environment
+
+```bash
+# Configure secrets (Gemini API key, upload signing secret)
+./configure.sh
 ```
 
 ### D1 migrations
@@ -53,6 +64,17 @@ npx wrangler d1 execute vens-hub-questions --file=../../bin/d1_migration_perform
 # Apply to production
 npx wrangler d1 execute vens-hub-questions --file=../../bin/d1_migration_performance.sql --remote
 ```
+
+### Backfill questions
+
+If courses are missing questions in D1:
+
+```bash
+cd bin
+python3 backfill_questions.py
+```
+
+For full deployment documentation, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Adaptive Learning
 
