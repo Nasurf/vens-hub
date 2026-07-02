@@ -63,8 +63,8 @@ class SignUpBloc extends Bloc<SignUpEvent, SignUpState> {
             password: state.password,
             firstName: state.firstName,
             lastName: state.lastName,
-            level: state.selectedLevel,
             department: state.selectedDepartment,
+            selectedCourses: const [],
           ),
         );
       }

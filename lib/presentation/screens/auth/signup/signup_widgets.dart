@@ -366,7 +366,7 @@ class CredentialsStepContent extends StatelessWidget {
                           ? Icons.visibility_off
                           : Icons.visibility,
                     ),
-                    onPressed: controller.togglePasswordVisibility,
+                    onPressed: () => controller.passwordVisible.value = !controller.passwordVisible.value,
                   ),
                 ),
                 validator:
@@ -389,7 +389,7 @@ class CredentialsStepContent extends StatelessWidget {
                           ? Icons.visibility_off
                           : Icons.visibility,
                     ),
-                    onPressed: controller.toggleConfirmPasswordVisibility,
+                    onPressed: () => controller.confirmPasswordVisible.value = !controller.confirmPasswordVisible.value,
                   ),
                 ),
                 validator:

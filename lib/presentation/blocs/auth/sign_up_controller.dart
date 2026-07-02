@@ -209,5 +209,6 @@ class SignUpController extends GetxController {
         selectedCourses: selectedCourses.toList(),
       ),
     );
+    // Navigation after sign-up is handled by the UI listening to AuthBloc state changes.
   }
 }

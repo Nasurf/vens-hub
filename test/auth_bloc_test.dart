@@ -11,8 +11,6 @@ import 'package:vens_hub/domain/auth/usecases/sign_in_user_usecase.dart';
 import 'package:vens_hub/domain/auth/usecases/sign_up_user_usecase.dart';
 import 'package:vens_hub/domain/auth/usecases/sign_out_user_usecase.dart';
 import 'package:vens_hub/domain/auth/usecases/complete_user_profile_data_storage_usecase.dart';
-import 'package:vens_hub/domain/auth/usecases/send_verification_email_usecase.dart';
-import 'package:vens_hub/domain/auth/usecases/check_email_verification_usecase.dart';
 import 'package:vens_hub/core/services/analytics/analytics_service.dart';
 import 'package:vens_hub/core/services/auth/auth_service.dart';
 import 'package:vens_hub/presentation/blocs/auth/auth_bloc.dart';
@@ -131,23 +129,7 @@ class MockCompleteUserProfileDataStorageUseCase implements CompleteUserProfileDa
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class MockSendVerificationEmailUseCase implements SendVerificationEmailUseCase {
-  final Future<Either<Failure, void>> Function()? onCall;
-  MockSendVerificationEmailUseCase({this.onCall});
-  @override
-  Future<Either<Failure, void>> call(NoParams params) => onCall != null ? onCall!() : Future.value(const Right(null));
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
 
-class MockCheckEmailVerificationUseCase implements CheckEmailVerificationUseCase {
-  final Future<Either<Failure, bool>> Function()? onCall;
-  MockCheckEmailVerificationUseCase({this.onCall});
-  @override
-  Future<Either<Failure, bool>> call(NoParams params) => onCall != null ? onCall!() : Future.value(const Right(true));
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
 
 void main() {
   late MockAnalyticsService mockAnalyticsService;
@@ -186,8 +168,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((_) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       expect(authBloc.state, equals(AuthInitial()));
@@ -212,8 +192,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((_) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       final expectedStates = [
@@ -235,8 +213,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((_) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       final expectedStates = [
@@ -258,8 +234,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((_) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       final expectedStates = [
@@ -281,8 +255,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((_) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       final expectedStates = [
@@ -311,8 +283,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((_) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       final expectedStates = [
@@ -339,8 +309,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((params) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       final expectedStates = [
@@ -354,8 +322,8 @@ void main() {
         password: 'password123',
         firstName: 'John',
         lastName: 'Doe',
-        level: '400',
         department: 'COE',
+        selectedCourses: ['COE 401'],
       ));
     });
 
@@ -369,8 +337,6 @@ void main() {
         signUpUserUseCase: MockSignUpUserUseCase((_) async => Right(testUser)),
         signOutUserUseCase: MockSignOutUserUseCase(() async => const Right(null)),
         completeUserProfileDataStorageUseCase: MockCompleteUserProfileDataStorageUseCase(),
-        sendVerificationEmailUseCase: MockSendVerificationEmailUseCase(),
-        checkEmailVerificationUseCase: MockCheckEmailVerificationUseCase(),
       );
 
       final expectedStates = [
@@ -391,7 +357,5 @@ class CloseableAuthBloc extends AuthBloc {
     required super.signUpUserUseCase,
     required super.signOutUserUseCase,
     required super.completeUserProfileDataStorageUseCase,
-    required super.sendVerificationEmailUseCase,
-    required super.checkEmailVerificationUseCase,
   });
 }

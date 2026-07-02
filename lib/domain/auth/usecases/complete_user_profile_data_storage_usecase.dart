@@ -21,8 +21,8 @@ class CompleteUserProfileDataStorageUseCase
       email: params.email,
       firstName: params.firstName,
       lastName: params.lastName,
-      level: params.level,
       department: params.department,
+      selectedCourses: params.selectedCourses,
     );
   }
 }
@@ -32,16 +32,16 @@ class CompleteUserProfileDataStorageParams extends Equatable {
   final String email;
   final String firstName;
   final String lastName;
-  final String level;
   final String department;
+  final List<String> selectedCourses;
 
   const CompleteUserProfileDataStorageParams({
     required this.userId,
     required this.email,
     required this.firstName,
     required this.lastName,
-    required this.level,
     required this.department,
+    required this.selectedCourses,
   });
 
   @override
@@ -50,7 +50,7 @@ class CompleteUserProfileDataStorageParams extends Equatable {
     email,
     firstName,
     lastName,
-    level,
     department,
+    selectedCourses,
   ];
 }

@@ -30,7 +30,4 @@ abstract class AuthRepository {
     required String department,
     required List<String> selectedCourses,
   });
-
-  Future<Either<Failure, void>> sendVerificationEmail();
-  Future<Either<Failure, bool>> checkEmailVerification();
 }

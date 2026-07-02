@@ -52,7 +52,3 @@ class AuthSignUpRequested extends AuthEvent {
 }
 
 class AuthSignOutRequested extends AuthEvent {}
-
-class AuthSendVerificationEmailRequested extends AuthEvent {}
-
-class AuthCheckEmailVerification extends AuthEvent {}
