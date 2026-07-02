@@ -536,8 +536,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         password: event.password,
         firstName: event.firstName,
         lastName: event.lastName,
-        level: event.level,
         department: event.department,
+        selectedCourses: event.selectedCourses,
       ),
     );
 
@@ -558,7 +558,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           tags: {
             'error': failure.message,
             'department': event.department,
-            'level': event.level,
           },
         );
         await analyticsService.logError(
@@ -578,7 +577,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           metricName: 'auth_sign_up_duration',
           value: duration.inMilliseconds,
           unit: 'ms',
-          tags: {'department': event.department, 'level': event.level},
+          tags: {'department': event.department},
         );
 
         final authSvc = di.sl<AuthService>();

@@ -17,7 +17,6 @@ class AppRoutes {
   static const String courses = "/courses";
   static const String search = "/search";
   static const String schedule = "/schedule";
-  static const String study = "/study";
   static const String profile = "/profile";
   static const String streaks = "/streaks";
 
@@ -34,11 +33,7 @@ class AppRoutes {
   static const String review = "/quiz/review";
   static const String dailyCongrats = "/quiz/congrats";
 
-  // Study Routes
-  static const String theoryQuestions = "/study/theory";
-  static const String problemScreen = "/study/problems";
-
-  // Other Pages
+  // Quiz Routes - Hierarchical
   static const String notFound = "/404";
   static const String hub = "/hub";
 

@@ -2763,9 +2763,25 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
         ),
         boxShadow: [
           BoxShadow(
+            color: Colors.white.withValues(alpha: 0.03),
+            offset: const Offset(0, 1),
+            blurRadius: 0,
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.02),
+            offset: const Offset(0, 1),
+            blurRadius: 2,
+          ),
+          BoxShadow(
             color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.04),
-            blurRadius: 12,
             offset: const Offset(0, 4),
+            blurRadius: 12,
+          ),
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.04),
+            offset: const Offset(0, 12),
+            blurRadius: 24,
           ),
         ],
       ),

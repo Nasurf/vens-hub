@@ -28,16 +28,16 @@ class AuthSignUpRequested extends AuthEvent {
   final String password;
   final String firstName;
   final String lastName;
-  final String level; // ADDED
-  final String department; // ADDED
+  final String department;
+  final List<String> selectedCourses;
 
   const AuthSignUpRequested({
     required this.email,
     required this.password,
     required this.firstName,
     required this.lastName,
-    required this.level, // ADDED
-    required this.department, // ADDED
+    required this.department,
+    required this.selectedCourses,
   });
 
   @override
@@ -46,9 +46,9 @@ class AuthSignUpRequested extends AuthEvent {
     password,
     firstName,
     lastName,
-    level,
     department,
-  ]; // MODIFIED: Add to props
+    selectedCourses,
+  ];
 }
 
 class AuthSignOutRequested extends AuthEvent {}

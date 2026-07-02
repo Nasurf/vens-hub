@@ -685,64 +685,70 @@ class _MobileHubPageState extends State<MobileHubPage> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      color: colorScheme.shadow.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                   border: Border.all(
-                    color: colorScheme.outline.withValues(alpha: 0.3),
+                    color: colorScheme.outline.withValues(alpha: 0.2),
                   ),
                 ),
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(4),
                 child: Obx(() {
                   final int selected = controller.currentTabIndex.value;
                   const titles = ['Day', 'Week', 'Month'];
                   return SizedBox(
                     height: 40,
-                    child: Row(
-                      children: List.generate(3, (index) {
-                        final bool isActive = selected == index;
-                        return Expanded(
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => controller.onTabChanged(index),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              alignment: Alignment.center,
+                    child: Stack(
+                      children: [
+                        AnimatedAlign(
+                          alignment: Alignment(-1.0 + (selected * 1.0), 0.0),
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOutCubic,
+                          child: FractionallySizedBox(
+                            widthFactor: 1 / 3,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
                               decoration: BoxDecoration(
-                                color:
-                                    isActive
-                                        ? colorScheme.primary.withValues(
-                                          alpha: 0.10,
-                                        )
-                                        : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
+                                color: colorScheme.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color:
-                                      isActive
-                                          ? colorScheme.primary
-                                          : colorScheme.outline.withValues(
-                                            alpha: 0.2,
-                                          ),
-                                ),
-                              ),
-                              child: Text(
-                                titles[index],
-                                textAlign: TextAlign.center,
-                                style: textTheme.labelLarge?.copyWith(
                                   color: colorScheme.primary,
-                                  fontWeight:
-                                      isActive
-                                          ? FontWeight.w700
-                                          : FontWeight.w600,
+                                  width: 1.5,
                                 ),
                               ),
                             ),
                           ),
-                        );
-                      }),
+                        ),
+                        Row(
+                          children: List.generate(3, (index) {
+                            final bool isActive = selected == index;
+                            return Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => controller.onTabChanged(index),
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  color: Colors.transparent,
+                                  child: Text(
+                                    titles[index],
+                                    textAlign: TextAlign.center,
+                                    style: textTheme.labelLarge?.copyWith(
+                                      color: isActive
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                      fontWeight: isActive
+                                          ? FontWeight.w700
+                                          : FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
                     ),
                   );
                 }),
@@ -846,7 +852,7 @@ class _SectionNavigator extends StatelessWidget {
       onHorizontalDragEnd: (_) {},
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        physics: const ClampingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         child: Row(
           children: [
             _NavChip(
@@ -2162,12 +2168,28 @@ class AnalyticsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.2)),
+        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.15)),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.06),
-            blurRadius: 16,
+            color: Colors.white.withValues(alpha: 0.03),
+            offset: const Offset(0, 1),
+            blurRadius: 0,
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.02),
+            offset: const Offset(0, 1),
+            blurRadius: 2,
+          ),
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.04),
             offset: const Offset(0, 4),
+            blurRadius: 12,
+          ),
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.04),
+            offset: const Offset(0, 12),
+            blurRadius: 24,
           ),
         ],
       ),
@@ -2244,7 +2266,9 @@ class AnalyticsUnlockTube extends StatelessWidget {
                   color: accent.withValues(alpha: 0.08),
                 ),
               ),
-              FractionallySizedBox(
+              AnimatedFractionallySizedBox(
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeOutBack,
                 heightFactor: clampedProgress,
                 child: Container(
                   margin: const EdgeInsets.all(3),

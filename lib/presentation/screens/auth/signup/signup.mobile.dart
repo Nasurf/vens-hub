@@ -13,8 +13,8 @@ class MobileSignUpScreen extends StatelessWidget {
   // The form steps now use the public, shared widgets.
   final List<Widget> _formSteps = const [
     NameStepContent(),
-    LevelStepContent(),
     DepartmentStepContent(),
+    CourseSelectionStepContent(),
     CredentialsStepContent(),
   ];
   @override

@@ -20,8 +20,8 @@ class SignUpUserUseCase implements UseCase<UserModel, SignUpParams> {
       password: params.password,
       firstName: params.firstName,
       lastName: params.lastName,
-      level: params.level, // MODIFIED: Pass level
-      department: params.department, // MODIFIED: Pass department
+      department: params.department,
+      selectedCourses: params.selectedCourses,
     );
   }
 }
@@ -31,16 +31,16 @@ class SignUpParams extends Equatable {
   final String password;
   final String firstName;
   final String lastName;
-  final String level; // ADDED
-  final String department; // ADDED
+  final String department;
+  final List<String> selectedCourses;
 
   const SignUpParams({
     required this.email,
     required this.password,
     required this.firstName,
     required this.lastName,
-    required this.level, // ADDED
-    required this.department, // ADDED
+    required this.department,
+    required this.selectedCourses,
   });
 
   @override
@@ -49,7 +49,7 @@ class SignUpParams extends Equatable {
     password,
     firstName,
     lastName,
-    level,
     department,
-  ]; // ADDED to props
+    selectedCourses,
+  ];
 }

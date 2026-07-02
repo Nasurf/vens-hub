@@ -5,11 +5,9 @@ import 'package:vens_hub/presentation/blocs/home/home_controller.dart';
 import 'package:vens_hub/presentation/screens/home/home_page/home_page.mobile.dart';
 import 'package:vens_hub/presentation/screens/profile/profile_screen.dart';
 import 'package:vens_hub/presentation/screens/schedule/schedule_page.mobile.dart';
-import 'package:vens_hub/presentation/screens/study/study_page.mobile.dart';
-import 'package:vens_hub/presentation/widgets/home/bottom_navigationbar.dart';
-import 'package:vens_hub/presentation/widgets/common/themed_hub_icon.dart';
-
 import 'package:vens_hub/presentation/screens/hub/hub_page.mobile.dart';
+import 'package:vens_hub/presentation/widgets/common/themed_hub_icon.dart';
+import 'package:vens_hub/presentation/widgets/home/bottom_navigationbar.dart';
 
 class MobileMainScreen extends StatefulWidget {
   const MobileMainScreen({super.key});
@@ -25,7 +23,6 @@ class _MobileMainScreenState extends State<MobileMainScreen>
     MobileHomePage(),
     MobileScheduleScreen(),
     MobileHubPage(),
-    MobileStudyPage(),
     ProfileScreen(),
   ];
   late final PageController _pageController;
@@ -400,19 +397,6 @@ class _WebMobileDrawer extends StatelessWidget {
                     selected: selectedIndex == 2,
                     onTap: () => onSelect(2),
                   ),
-                  _NavTile(
-                    icon: Icons.menu_book_outlined,
-                    selectedIcon: Icons.menu_book_rounded,
-                    label: 'Study',
-                    selected: selectedIndex == 3,
-                    onTap: () => onSelect(3),
-                  ),
-
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Divider(),
-                  ),
-
                   _NavTile(
                     icon: Icons.person_outline,
                     selectedIcon: Icons.person_rounded,

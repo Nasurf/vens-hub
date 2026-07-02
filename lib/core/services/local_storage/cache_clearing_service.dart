@@ -10,7 +10,6 @@ import 'package:vens_hub/core/services/notifications/notification_prefs_service.
 import 'package:vens_hub/core/services/notifications/notification_service.dart';
 import 'package:vens_hub/core/services/theme/theme_service.dart';
 import 'package:vens_hub/core/theme/theme_enums.dart';
-import 'package:vens_hub/domain/study/repositories/study_repository.dart';
 
 class CacheClearingService {
   /// Clear all user-related caches on logout
@@ -20,7 +19,6 @@ class CacheClearingService {
       await _clearSharedPreferences();
       await _clearGetStorage();
       await _clearFileCache();
-      await _clearStudyCache();
       await _resetNotificationPrefs();
       await _resetThemePrefs();
       log("CacheClearingService: All user caches cleared successfully");
@@ -78,14 +76,6 @@ class CacheClearingService {
   Future<void> _clearFileCache() async {
     try {
       await DefaultCacheManager().emptyCache();
-    } catch (_) {}
-  }
-
-  Future<void> _clearStudyCache() async {
-    try {
-      if (di.sl.isRegistered<StudyRepository>()) {
-        di.sl<StudyRepository>().clearCache();
-      }
     } catch (_) {}
   }
 

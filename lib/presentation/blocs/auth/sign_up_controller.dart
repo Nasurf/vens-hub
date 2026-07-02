@@ -1,25 +1,21 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart'; // Re-add Bloc for context.read
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get/get.dart';
 import 'package:vens_hub/presentation/widgets/common/app_notification.dart';
-import 'package:vens_hub/presentation/blocs/auth/auth_bloc.dart'; // Re-add AuthBloc
-import 'package:vens_hub/presentation/blocs/auth/auth_event.dart'; // Re-add AuthEvent
-// GetX AuthenticationRepository is removed from here
-// RegistrationOnboardingModel is not directly used here now, AuthSignUpRequested takes individual fields
-// AppRouter and Routes are used by UI listening to AuthBloc state, not directly by controller for this action
-// EmailVerificationScreenArgs is used by UI listening to AuthBloc state
+import 'package:vens_hub/presentation/blocs/auth/auth_bloc.dart';
+import 'package:vens_hub/presentation/blocs/auth/auth_event.dart';
+import 'package:vens_hub/core/config/environment_config.dart';
+import 'package:http/http.dart' as http;
 
 class SignUpController extends GetxController {
-  // final AuthenticationRepository _authRepository = Get.find(); // Removed
-
-  // UI and Step Management
   final pageController = PageController();
-  final totalSteps = 4;
+  final totalSteps = 4; // Name → Department → Courses → Credentials
   final RxInt currentStep = 0.obs;
 
   // Form Keys
-  final formKey1 = GlobalKey<FormState>(); // Names
-  final formKey4 = GlobalKey<FormState>(); // Credentials
+  final formKey1 = GlobalKey<FormState>();
+  final formKey4 = GlobalKey<FormState>();
 
   // Form Controllers
   final firstNameController = TextEditingController();
@@ -29,64 +25,62 @@ class SignUpController extends GetxController {
   final confirmPasswordController = TextEditingController();
 
   // State
-  final RxString selectedLevel = ''.obs;
-  final RxString selectedDepartment = ''.obs;
+  final RxString selectedDepartmentCode = ''.obs;
+  final RxString selectedDepartmentName = ''.obs;
   final RxBool isLoading = false.obs;
   final RxBool passwordVisible = false.obs;
   final RxBool confirmPasswordVisible = false.obs;
 
-  // Data for UI Selection Cards
-  final Map<String, IconData> levelOptions = {
-    '100 Lvl': Icons.looks_one_outlined,
-    '200 Lvl': Icons.looks_two_outlined,
-    '300 Lvl': Icons.looks_3_outlined,
-    '400 Lvl': Icons.looks_4_outlined,
-    '500 Lvl': Icons.looks_5_outlined,
-  };
-  final Map<String, IconData> departmentOptions = {
-    'Aeronautics Engineering': Icons.flight_takeoff,
-    'Biomedical Engineering': Icons.biotech,
-    'Chemical Engineering': Icons.science_outlined,
-    'Civil Engineering': Icons.maps_home_work_outlined,
-    'Computer Engineering': Icons.computer,
-    'Electrical Engineering': Icons.electrical_services_outlined,
-    'Mechanical Engineering': Icons.settings_outlined,
-    'Mechatronics Engineering': Icons.memory,
-    'Petroleum Engineering': Icons.local_gas_station_outlined,
-  };
+  // Department & Course data (fetched from Worker API)
+  final RxList<Map<String, dynamic>> departments = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> availableCourses = <Map<String, dynamic>>[].obs;
+  final RxList<String> selectedCourses = <String>[].obs;
+  final RxBool isFetchingCourses = false.obs;
+  final RxString coursesError = ''.obs;
 
-  // Map for converting UI department names to Firestore collection codes
-  final Map<String, String> _departmentNameToCodeMap = {
-    'Electrical Engineering': 'EEE',
-    'Mechanical Engineering': 'MEE',
-    'Mechatronics Engineering': 'MCT',
-    'Computer Engineering': 'COE',
-    'Chemical Engineering': 'CHE',
-    'Biomedical Engineering': 'BME',
-    'Aeronautics Engineering': 'AAE',
-    'Civil Engineering': 'CVE',
-    'Petroleum Engineering': 'PTE',
-  };
+  // Course search & filter
+  final RxString courseSearchQuery = ''.obs;
+  final RxString courseTypeFilter = ''.obs; // '' = all, 'CORE', 'ELECTIVE'
+
+  /// Filtered courses based on search query and type filter
+  List<Map<String, dynamic>> get filteredCourses {
+    var courses = availableCourses.toList();
+    final query = courseSearchQuery.value.trim().toLowerCase();
+    final typeFilter = courseTypeFilter.value;
+
+    if (query.isNotEmpty) {
+      courses = courses.where((c) =>
+        (c['code'] as String? ?? '').toLowerCase().contains(query) ||
+        (c['title'] as String? ?? '').toLowerCase().contains(query)
+      ).toList();
+    }
+    if (typeFilter.isNotEmpty) {
+      courses = courses.where((c) =>
+        (c['type'] as String? ?? '') == typeFilter
+      ).toList();
+    }
+    return courses;
+  }
 
   @override
   void onInit() {
     super.onInit();
-    // Add a listener to sync the current step with the PageView's page.
-    // This is more robust than relying on onPageChanged callbacks.
     pageController.addListener(() {
       final page = pageController.page?.round() ?? currentStep.value;
       if (currentStep.value != page) {
         currentStep.value = page;
-        update(); // Notify GetBuilder listeners of the change
+        update();
       }
     });
 
-    // These listeners correctly call update() to rebuild the GetBuilder.
     firstNameController.addListener(() => update());
     lastNameController.addListener(() => update());
     emailController.addListener(() => update());
     passwordController.addListener(() => update());
     confirmPasswordController.addListener(() => update());
+
+    // Fetch departments on init
+    fetchDepartments();
   }
 
   @override
@@ -100,19 +94,77 @@ class SignUpController extends GetxController {
     super.onClose();
   }
 
-  // MODIFIED: This getter is now "pure" and does not call .validate()
+  Future<void> fetchDepartments() async {
+    try {
+      final uri = Uri.parse('${EnvironmentConfig.apiBaseUrl}/departments');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        departments.assignAll((data['departments'] as List).cast<Map<String, dynamic>>());
+      }
+    } catch (_) {
+      // Fallback to static department list if API fails
+      departments.assignAll([
+        {'name': 'AERONAUTICAL ENGINEERING', 'code': 'AER'},
+        {'name': 'BIOMEDICAL ENGINEERING', 'code': 'BIO'},
+        {'name': 'CHEMICAL ENGINEERING', 'code': 'CHE'},
+        {'name': 'CIVIL ENGINEERING', 'code': 'CIV'},
+        {'name': 'COMPUTER ENGINEERING', 'code': 'COM'},
+        {'name': 'ELECTRICAL AND ELECTRONICS ENGINEERING', 'code': 'ELE'},
+        {'name': 'MECHANICAL ENGINEERING', 'code': 'MEC'},
+        {'name': 'MECHATRONICS ENGINEERING', 'code': 'MCT'},
+        {'name': 'PETROLEUM ENGINEERING', 'code': 'PET'},
+      ]);
+    }
+  }
+
+  Future<void> fetchCoursesForDepartment(String deptCode) async {
+    isFetchingCourses.value = true;
+    coursesError.value = '';
+    try {
+      final uri = Uri.parse('${EnvironmentConfig.apiBaseUrl}/departments/$deptCode/courses');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        availableCourses.assignAll((data['courses'] as List).cast<Map<String, dynamic>>());
+      } else {
+        coursesError.value = 'Failed to load courses';
+      }
+    } catch (e) {
+      coursesError.value = 'Network error loading courses';
+    } finally {
+      isFetchingCourses.value = false;
+    }
+  }
+
+  void selectDepartment(String code, String name) {
+    selectedDepartmentCode.value = code;
+    selectedDepartmentName.value = name;
+    selectedCourses.clear();
+    availableCourses.clear();
+    fetchCoursesForDepartment(code);
+    update();
+  }
+
+  void toggleCourse(String courseCode) {
+    if (selectedCourses.contains(courseCode)) {
+      selectedCourses.remove(courseCode);
+    } else if (selectedCourses.length < 10) {
+      selectedCourses.add(courseCode);
+    }
+    update();
+  }
+
   bool get canProceed {
     switch (currentStep.value) {
       case 0:
         return firstNameController.text.trim().isNotEmpty &&
             lastNameController.text.trim().isNotEmpty;
       case 1:
-        return selectedLevel.value.isNotEmpty;
+        return selectedDepartmentCode.value.isNotEmpty;
       case 2:
-        return selectedDepartment.value.isNotEmpty;
+        return selectedCourses.isNotEmpty; // At least 1 course required
       case 3:
-        // This is a "silent" check. It checks the conditions without
-        // triggering a UI update on the FormFields themselves.
         return GetUtils.isEmail(emailController.text.trim()) &&
             passwordController.text.trim().length >= 6 &&
             passwordController.text.trim() ==
@@ -122,37 +174,11 @@ class SignUpController extends GetxController {
     }
   }
 
-  void selectLevel(String level) {
-    selectedLevel.value = level;
-    update(); // Manually trigger an update for GetBuilder
-  }
-
-  void selectDepartment(String department) {
-    selectedDepartment.value = department;
-    update(); // Manually trigger an update for GetBuilder
-  }
-
-  void togglePasswordVisibility() =>
-      passwordVisible.value = !passwordVisible.value;
-  void toggleConfirmPasswordVisibility() =>
-      confirmPasswordVisible.value = !confirmPasswordVisible.value;
-
   void nextStep() {
     Get.focusScope?.unfocus();
-
-    // Step-specific validation.
-    // For the name step, trigger form validation.
     if (currentStep.value == 0) {
-      if (!formKey1.currentState!.validate()) {
-        return; // Stop if the form is invalid.
-      }
+      if (!formKey1.currentState!.validate()) return;
     }
-
-    // For other steps (1 and 2), the `canProceed` getter already ensures
-    // a selection has been made, so the button would be disabled otherwise.
-    // No need for extra validation here.
-
-    // Proceed to the next page if we are not on the last step.
     if (currentStep.value < totalSteps - 1) {
       pageController.nextPage(
         duration: const Duration(milliseconds: 400),
@@ -169,32 +195,9 @@ class SignUpController extends GetxController {
     );
   }
 
-  // MODIFIED: The .validate() call is now correctly placed here.
   void completeSignUp(BuildContext context) {
     Get.focusScope?.unfocus();
-
-    // Call .validate() here, as part of the user's explicit action.
-    // This is the correct place to trigger UI updates for form errors.
-    if (!formKey4.currentState!.validate()) {
-      return; // If validation fails, stop execution.
-    }
-
-    final String departmentFullName = selectedDepartment.value;
-    final String? departmentCode = _departmentNameToCodeMap[departmentFullName];
-
-    if (departmentCode == null) {
-      AppNotifier.error(
-        context: Get.context,
-        title: 'Error',
-        message: 'An internal error occurred with the department selection.',
-      );
-      return;
-    }
-
-    final String levelCode = selectedLevel.value.replaceAll(' Lvl', '').trim();
-
-    // isLoading state will be handled by AuthBloc (AuthLoading state)
-    // isLoading.value = true;
+    if (!formKey4.currentState!.validate()) return;
 
     context.read<AuthBloc>().add(
       AuthSignUpRequested(
@@ -202,11 +205,9 @@ class SignUpController extends GetxController {
         password: passwordController.text.trim(),
         firstName: firstNameController.text.trim(),
         lastName: lastNameController.text.trim(),
-        level: levelCode,
-        department: departmentCode,
+        department: selectedDepartmentCode.value,
+        selectedCourses: selectedCourses.toList(),
       ),
     );
-    // Navigation to EmailVerificationScreen will be handled by the UI
-    // listening to AuthBloc state changes (specifically AuthVerificationEmailSent state).
   }
 }

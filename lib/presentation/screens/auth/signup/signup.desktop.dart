@@ -63,8 +63,8 @@ class _ProgressPanel extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     const stepTitles = [
       "Your Name",
-      "Your Level",
       "Your Department",
+      "Your Courses",
       "Your Credentials",
     ];
 
@@ -138,11 +138,10 @@ class _FormPanel extends StatelessWidget {
 
   const _FormPanel({required this.controller});
 
-  // The form steps now use the public, shared widgets.
   final List<Widget> _formSteps = const [
     NameStepContent(),
-    LevelStepContent(),
     DepartmentStepContent(),
+    CourseSelectionStepContent(),
     CredentialsStepContent(),
   ];
 

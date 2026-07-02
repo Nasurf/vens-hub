@@ -59,33 +59,37 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
 
-  // This helper now uses FireStoreServices to create the user profile.
   Future<UserModel> _createUserProfile({
     required String uid,
     required String email,
     required String firstName,
     required String lastName,
-    required String level,
     required String department,
-    required bool isEmailVerified, // Added
+    required List<String> selectedCourses,
+    required bool isEmailVerified,
   }) async {
-    final List<CourseInfo> courseInfo = await _fetchCourseInfoForUser(
-      level,
-      department,
-    );
+    // Build minimal course info from selected course codes
+    final courseInfo = selectedCourses.map((code) => CourseInfo(
+      id: code,
+      title: '',
+      code: code,
+      semester: const [],
+      tags: const [],
+      departmentCodes: const [],
+      topics: const [],
+    )).toList();
 
     final userModel = UserModel(
       id: uid,
       email: email,
       firstName: firstName,
       lastName: lastName,
-      level: level,
+      level: '',
       department: department,
       courseInfo: courseInfo,
       createdAt: DateTime.now(),
-      isEmailVerified: isEmailVerified, // Added
+      isEmailVerified: isEmailVerified,
     );
-    // Use FireStoreServices to set user data
     await firestoreService.setUserData(userModel);
     return userModel;
   }
@@ -96,8 +100,8 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
     required String firstName,
     required String lastName,
-    required String level,
     required String department,
+    required List<String> selectedCourses,
   }) async {
     try {
       final firebaseUser = await authService.signUpWithEmailAndPassword(
@@ -115,10 +119,10 @@ class AuthRepositoryImpl implements AuthRepository {
         email: firebaseUser.email ?? email,
         firstName: firstName,
         lastName: lastName,
-        level: level,
         department: department,
+        selectedCourses: selectedCourses,
         isEmailVerified:
-            firebaseUser.emailVerified, // Pass email verification status
+            firebaseUser.emailVerified,
       );
 
       // After successful sign-up and profile creation, emit AuthAwaitingVerification
@@ -450,11 +454,10 @@ class AuthRepositoryImpl implements AuthRepository {
     required String email,
     required String firstName,
     required String lastName,
-    required String level,
     required String department,
+    required List<String> selectedCourses,
   }) async {
     try {
-      // Ensure the user is still valid before proceeding
       final fbUser = await authService.getCurrentFirebaseUser();
       if (fbUser == null || fbUser.uid != userId) {
         return Left(
@@ -469,9 +472,9 @@ class AuthRepositoryImpl implements AuthRepository {
         email: email,
         firstName: firstName,
         lastName: lastName,
-        level: level, // This is the code, e.g., "100"
         department: department,
-        isEmailVerified: fbUser.emailVerified, // This is the code, e.g., "EEE"
+        selectedCourses: selectedCourses,
+        isEmailVerified: fbUser.emailVerified,
       );
 
       return Right(userModel);

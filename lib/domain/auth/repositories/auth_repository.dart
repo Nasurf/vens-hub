@@ -15,21 +15,20 @@ abstract class AuthRepository {
     required String password,
     required String firstName,
     required String lastName,
-    required String level, // ADDED
-    required String department, // ADDED
+    required String department,
+    required List<String> selectedCourses,
   });
   Future<Either<Failure, void>> signOut();
   Future<Either<Failure, UserModel?>> getCurrentUser();
   Future<Either<Failure, void>> deleteAccountAndData();
 
   Future<Either<Failure, UserModel>> completeUserProfileDataStorage({
-    // New method for step 4
-    required String userId, // Firebase Auth UID
+    required String userId,
     required String email,
     required String firstName,
     required String lastName,
-    required String level,
     required String department,
+    required List<String> selectedCourses,
   });
 
   Future<Either<Failure, void>> sendVerificationEmail();

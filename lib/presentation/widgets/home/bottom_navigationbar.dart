@@ -34,23 +34,33 @@ class _FloatingNavBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(32),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            color: Colors.white.withValues(alpha: 0.04),
+            offset: const Offset(0, 1),
+            blurRadius: 0,
             spreadRadius: 0,
           ),
           BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.04),
-            blurRadius: 6,
+            color: colorScheme.shadow.withValues(alpha: 0.02),
             offset: const Offset(0, 2),
+            blurRadius: 4,
+          ),
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.04),
+            offset: const Offset(0, 8),
+            blurRadius: 16,
+          ),
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.06),
+            offset: const Offset(0, 16),
+            blurRadius: 32,
           ),
         ],
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-          width: 1,
-        ),
       ),
       child: Obx(() {
         final selectedIndex = controller.currentPage.value;

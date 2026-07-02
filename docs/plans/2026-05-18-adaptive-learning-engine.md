@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: /home/nasbombz/.gstack/projects/vens-hub/main-autoplan-restore-20260702-014623.md -->
 # Adaptive Learning Engine Implementation Plan
 
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.

@@ -31,10 +31,7 @@ import 'package:firebase_storage/firebase_storage.dart'; // Import FirebaseStora
 import 'package:vens_hub/core/services/storage/firebase_storage_service.dart'; // Import FirebaseStorageService
 import 'package:vens_hub/core/services/storage/r2_storage_service.dart'; // Import R2StorageService
 import 'package:vens_hub/core/services/storage/firestore_textbook_service.dart'; // Import FirestoreTextbookService
-import 'package:vens_hub/domain/study/repositories/study_repository.dart'; // Import StudyRepository
-import 'package:vens_hub/data/study/repositories/study_repository_impl.dart'; // Import StudyRepositoryImpl
 import 'package:vens_hub/presentation/blocs/home/home_controller.dart';
-import 'package:vens_hub/presentation/blocs/study/study_bloc.dart'; // Import StudyBloc
 import 'package:vens_hub/core/services/data/firestore_service.dart'; // Import FireStoreServices
 import 'package:vens_hub/core/services/notifications/notification_service.dart'; // Import NotificationService
 import 'package:vens_hub/core/services/notifications/notification_test_service.dart'; // Import NotificationTestService
@@ -148,10 +145,6 @@ Future<void> initDI() async {
         dailyCacheService: sl(),
       ),
     );
-    sl.registerLazySingleton<StudyRepository>(
-      // Study Repository Registration
-      () => StudyRepositoryImpl(storageService: sl()),
-    );
     // Use cases
     // Auth Use Cases
     sl.registerLazySingleton(() => SignInUserUseCase(sl()));
@@ -194,8 +187,6 @@ Future<void> initDI() async {
 
     sl.registerFactory(() => HomeController());
 
-    // Study BLoC
-    sl.registerFactory(() => StudyBloc(studyRepository: sl()));
   } finally {
     // Stop the trace when done
     try {

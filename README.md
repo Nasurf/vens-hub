@@ -1,6 +1,6 @@
-# vens_hub
+# Vens Hub
 
-A new Flutter project.
+Vens Hub - Collaborative Learning Platform
 
 ## Getting Started
 

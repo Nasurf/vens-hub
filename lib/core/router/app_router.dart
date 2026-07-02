@@ -117,15 +117,6 @@ class AppRouter {
       transition: kIsWeb ? Transition.fadeIn : Transition.native,
     ),
     GetPage(
-      name: AppRoutes.study,
-      page: () {
-        final homeController = Get.find<HomeController>();
-        homeController.currentPage.value = 3;
-        return const MainScreen();
-      },
-      transition: kIsWeb ? Transition.fadeIn : Transition.native,
-    ),
-    GetPage(
       name: AppRoutes.profile,
       page: () {
         final homeController = Get.find<HomeController>();

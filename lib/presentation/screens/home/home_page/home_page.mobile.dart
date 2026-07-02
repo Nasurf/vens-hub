@@ -490,7 +490,7 @@ class _MobileHomePageState extends State<MobileHomePage>
                                             PageView.builder(
                                               controller: _pageController,
                                               physics:
-                                                  const ClampingScrollPhysics(),
+                                                  const BouncingScrollPhysics(),
                                               scrollDirection: Axis.horizontal,
                                               itemCount: courses.length,
                                               onPageChanged:

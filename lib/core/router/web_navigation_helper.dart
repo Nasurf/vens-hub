@@ -82,8 +82,6 @@ class WebNavigationHelper {
         return 'Engineering Hub - Home';
       case AppRoutes.courses:
         return 'Engineering Courses - Engineering Hub';
-      case AppRoutes.study:
-        return 'Study Materials - Engineering Hub';
       case AppRoutes.schedule:
         return 'Class Schedule - Engineering Hub';
       case AppRoutes.profile:
@@ -113,24 +111,15 @@ class WebNavigationHelper {
       case AppRoutes.courses:
         breadcrumbs.add(BreadcrumbItem('Courses', AppRoutes.courses));
         break;
-      case AppRoutes.study:
-        breadcrumbs.add(BreadcrumbItem('Study', AppRoutes.study));
-        break;
       case AppRoutes.schedule:
         breadcrumbs.add(BreadcrumbItem('Schedule', AppRoutes.schedule));
         break;
       case AppRoutes.quiz:
-        breadcrumbs.addAll([
-          BreadcrumbItem('Study', AppRoutes.study),
-          BreadcrumbItem('Quiz', AppRoutes.quiz),
-        ]);
+        breadcrumbs.add(BreadcrumbItem('Quiz', AppRoutes.quiz));
         break;
       case AppRoutes.theoryQuiz:
-        breadcrumbs.addAll([
-          BreadcrumbItem('Study', AppRoutes.study),
-          BreadcrumbItem('Quiz', AppRoutes.quiz),
-          BreadcrumbItem('Theory', AppRoutes.theoryQuiz),
-        ]);
+        breadcrumbs.add(BreadcrumbItem('Quiz', AppRoutes.quiz));
+        breadcrumbs.add(BreadcrumbItem('Theory', AppRoutes.theoryQuiz));
         break;
     }
 
@@ -157,8 +146,6 @@ class WebNavigationHelper {
         return 'Engineering Hub - Your comprehensive platform for engineering education, courses, quizzes, and study materials.';
       case AppRoutes.courses:
         return 'Explore engineering courses across multiple disciplines. Interactive learning with quizzes and study materials.';
-      case AppRoutes.study:
-        return 'Access study materials, upload PDFs, and get AI-powered assistance for your engineering studies.';
       case AppRoutes.quiz:
         return 'Test your knowledge with interactive quizzes designed for engineering students.';
       default:

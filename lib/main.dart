@@ -22,8 +22,6 @@ import 'package:vens_hub/domain/repositories/schedule_repository.dart';
 import 'package:vens_hub/presentation/blocs/home/home_controller.dart';
 import 'package:vens_hub/core/observers/bloc_observer.dart';
 import 'package:vens_hub/presentation/blocs/quiz/quiz_bloc.dart';
-import 'package:vens_hub/presentation/blocs/study/study_bloc.dart';
-import 'package:vens_hub/presentation/blocs/study/pdf_viewer_bloc.dart';
 import 'package:vens_hub/core/services/auth/auth_service.dart';
 import 'package:vens_hub/core/services/theme/theme_service.dart';
 import 'package:vens_hub/core/observers/analytics_observer.dart';
@@ -69,9 +67,7 @@ void main() async {
         BlocProvider<AuthBloc>(
           create: (context) => di.sl<AuthBloc>()..add(AuthAppStarted()),
         ),
-        BlocProvider(create: (_) => di.sl<StudyBloc>()),
         BlocProvider(create: (context) => QuizBloc()),
-        BlocProvider(create: (_) => PdfViewerBloc()),
       ],
       child: MyApp(initialRoute: "/"),
     ),
