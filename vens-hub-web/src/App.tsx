@@ -55,7 +55,6 @@ import {
   registerWithEmail,
   loginWithGoogle,
   signOutUser,
-  getUserIdHeader,
 } from './firebase'
 
 type Department = {
@@ -234,7 +233,7 @@ function useProfile() {
 function useFirebaseUser() {
   const [user, setUser] = useState<import('firebase/auth').User | null | 'loading'>('loading')
   useEffect(() => {
-    const unsub = onAuthChange((u) => setUser(u))
+    const unsub = onAuthChange((u: import('firebase/auth').User | null) => setUser(u))
     return unsub
   }, [])
   return user
@@ -740,36 +739,60 @@ function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!email.includes('@') || password.length < 6) {
-      setError('Use a valid email and a password with at least 6 characters.')
-      return
+    setError('')
+    setLoading(true)
+    try {
+      await loginWithEmail(email, password)
+      navigate('/app')
+    } catch (err: any) {
+      const code = err?.code || ''
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+        setError('No account found with these details. Check your email or sign up.')
+      } else if (code === 'auth/wrong-password') {
+        setError('Incorrect password. Try again or reset your password.')
+      } else if (code === 'auth/invalid-email') {
+        setError('Enter a valid email address.')
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many attempts. Try again later.')
+      } else {
+        setError(err?.message || 'Sign in failed. Try again.')
+      }
+    } finally {
+      setLoading(false)
     }
-    const existing = getProfile()
-    const profile: Profile = existing?.email === email ? existing : demoProfile(email)
-    saveProfile(profile)
-    navigate('/app')
   }
 
-  function useDemo() {
-    saveProfile(demoProfile('engineer@example.com'))
-    navigate('/app')
+  async function handleGoogleSignIn() {
+    setError('')
+    setLoading(true)
+    try {
+      await loginWithGoogle()
+      navigate('/app')
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setError(err?.message || 'Google sign in failed.')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <PublicShell>
       <AuthCard
         title="Welcome back"
-        subtitle="Continue to your engineering workspace. Firebase auth will plug into this shell next."
+        subtitle="Sign in to continue to your engineering workspace."
       >
         <form onSubmit={submit} className="auth-form">
           <label>
             Email address
             <span>
               <Mail size={18} />
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="engineer@example.com" />
+              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="engineer@example.com" disabled={loading} />
             </span>
           </label>
           <label>
@@ -779,19 +802,23 @@ function LoginPage() {
               <input
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="Minimum 6 characters"
+                placeholder="Enter your password"
                 type="password"
+                disabled={loading}
               />
             </span>
           </label>
           {error && <p className="form-error">{error}</p>}
-          <button className="primary-button full" type="submit">
-            Sign in
-          </button>
-          <button className="ghost-button full" type="button" onClick={useDemo}>
-            Continue with demo account
+          <button className="primary-button full" type="submit" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
+        <button className="google-button full" type="button" onClick={handleGoogleSignIn} disabled={loading}>
+          Sign in with Google
+        </button>
         <p className="auth-switch">
           New to Vens Hub? <Link to="/register">Create an account</Link>
         </p>
