@@ -946,15 +946,6 @@ function RegisterPage() {
     setError('')
     setLoading(true)
     try {
-      if (hasFirebaseConfig) {
-        const user = await registerWithEmail(email, password)
-        // Save to Worker (best-effort)
-        fetch(`${API_BASE}/user/profile`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-User-Id': user.uid },
-          body: JSON.stringify(profileData),
-        }).catch(() => {})
-      }
       if (!selectedDepartment) return
       const profileData = {
         firstName: firstName.trim(),
@@ -964,12 +955,20 @@ function RegisterPage() {
         departmentName: selectedDepartment.name,
         selectedCourses,
       }
+
+      let uid = 'demo-user'
+      if (hasFirebaseConfig) {
+        const user = await registerWithEmail(email, password)
+        uid = user.uid
+      }
+
       // Save to Worker (best-effort)
       fetch(`${API_BASE}/user/profile`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-Id': user.uid },
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': uid },
         body: JSON.stringify(profileData),
       }).catch(() => {})
+
       // Save to localStorage (fast cache)
       saveProfile(profileData)
       navigate('/app')
@@ -1809,7 +1808,7 @@ function TheoryQuizMode({ code, courseTitle, questions }: { code: string; course
   const [feedback, setFeedback] = useState<{ isCorrect: boolean; score: number; expected: string } | null>(null)
   const [results, setResults] = useState<boolean[]>([])
   const current = questions[index]
-  const finished = questions.length > 0 && results.length === questions.length
+  const finished = index === questions.length
   const score = results.filter(Boolean).length
 
   function submitTheoryAnswer() {
@@ -1881,7 +1880,7 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
   const [results, setResults] = useState<boolean[]>([])
   const current = questions[index]
   const gap = makeGapPrompt(current)
-  const finished = questions.length > 0 && results.length === questions.length
+  const finished = index === questions.length
   const score = results.filter(Boolean).length
 
   function submitGapAnswer() {
