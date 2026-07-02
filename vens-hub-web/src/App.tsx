@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { DayPicker } from 'react-day-picker'
+import { format, isSameDay, isToday, startOfMonth, addMonths, subMonths } from 'date-fns'
+import 'react-day-picker/style.css'
 import {
   AlertCircle,
   ArrowLeft,
@@ -75,7 +79,7 @@ import {
   getUserMastery,
   getUserMasteryForCourse,
   getUserAttempts,
-  type AdaptiveAttempt,
+  type AttemptRecord,
   type CourseStats,
   type MasteryRecord,
 } from './adaptive'
@@ -154,7 +158,7 @@ type QuizAttempt = {
   id: string
   courseCode: string
   courseTitle: string
-  mode?: 'multiple-choice' | 'theory' | 'gap-fill'
+  mode?: 'multiple-choice'
   score: number
   total: number
   createdAt: string
@@ -204,7 +208,7 @@ const departments: Department[] = [
 
 
 const featureHighlights = [
-  'Interactive quizzes: multiple choice, theory and gap-fill ready',
+  'Interactive quizzes backed by the live Vens Hub question API',
   'Smart schedule for class planning and self-study blocks',
   'Course workspace backed by the live Vens Hub question API',
   'Progress hub for streaks, performance and subject focus',
@@ -577,48 +581,6 @@ async function askAssistant(question: string, context?: string) {
     return response.answer?.trim() || makeAssistantFallback(question, context)
   } catch {
     return makeAssistantFallback(question, context)
-  }
-}
-
-function normalizeText(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/\\[a-z]+/g, ' ')
-    .replace(/[^a-z0-9.+-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function tokenSet(value: string) {
-  return new Set(normalizeText(value).split(' ').filter((token) => token.length > 2))
-}
-
-function scoreTheoryAnswer(answer: string, question: Question) {
-  const correctText = question.correct_answer_text || questionOptions(question)[answerIndex(question)] || question.correct_answer || ''
-  const expected = `${correctText} ${question.explanation ?? ''} ${parseJsonList(question.solution_steps).join(' ')}`
-  const answerTokens = tokenSet(answer)
-  const expectedTokens = [...tokenSet(expected)].filter((token) => !['the', 'and', 'for', 'with', 'from'].includes(token))
-  const overlap = expectedTokens.filter((token) => answerTokens.has(token)).length
-  const normalizedCorrect = normalizeText(correctText)
-  const directAnswerHit = normalizedCorrect.length > 0 && normalizeText(answer).includes(normalizedCorrect.slice(0, 24).trim())
-  const ratio = expectedTokens.length ? overlap / Math.min(expectedTokens.length, 12) : 0
-  const score = directAnswerHit ? 1 : Math.min(1, ratio)
-  return {
-    score,
-    isCorrect: score >= 0.35 || directAnswerHit,
-    expected: correctText,
-  }
-}
-
-function makeGapPrompt(question: Question) {
-  const options = questionOptions(question)
-  const correct = question.correct_answer_text || options[answerIndex(question)] || question.correct_answer || 'the correct answer'
-  const explanation = question.explanation || parseJsonList(question.solution_steps)[0] || 'Use the worked solution to identify the missing term.'
-  const choices = [correct, ...options.filter((option) => normalizeText(option) !== normalizeText(correct))].slice(0, 4)
-  return {
-    statement: `The missing answer is _____. ${explanation}`,
-    correct,
-    choices,
   }
 }
 
@@ -1382,31 +1344,13 @@ function demoProfile(email: string): Profile {
 
 function RequireAuth() {
   const firebaseUser = useFirebaseUser()
-  const [profile, setProfile] = useState<Profile | null>(() => getProfile())
   const location = useLocation()
-
-  // If Firebase auth is confirmed but localStorage is empty, fetch from Worker
-  useEffect(() => {
-    if (firebaseUser === 'loading' || !firebaseUser || profile) return
-    fetch(`${API_BASE}/user/profile`, {
-      headers: { 'X-User-Id': firebaseUser.uid },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.profile) {
-          saveProfile(data.profile)
-          setProfile(data.profile)
-        }
-      })
-      .catch(() => {})
-  }, [firebaseUser, profile])
 
   if (firebaseUser === 'loading') {
     return <div className="page-stack narrow"><div className="loading-spinner" /></div>
   }
-  // Allow either a Firebase user (when configured) or a local profile (mock/dev fallback)
-  const authed = Boolean(firebaseUser || profile)
-  if (!authed) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  // Firebase auth required — no local profile fallback
+  if (!firebaseUser) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   return <Outlet />
 }
 
@@ -2008,10 +1952,8 @@ function QuizPage() {
     if (topicParam) {
       filtered = filtered.filter((q) => q.topic_name === topicParam)
     }
-    if (typeParam === 'calculation') {
-      filtered = filtered.filter((q) => q.question_type === 'calculation')
-    } else if (typeParam === 'theory') {
-      filtered = filtered.filter((q) => q.question_type === 'theory')
+    if (typeParam) {
+      filtered = filtered.filter((q) => q.question_type === typeParam)
     }
     const limit = countParam ? Math.max(1, parseInt(countParam, 10) || 10) : 10
     return filtered.slice(0, limit)
@@ -2102,6 +2044,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   const current = mcqQuestions[index]
   const score = answers.filter((answer) => answer.selected === answer.correct).length
   const lastAnswer = answers[answers.length - 1]
+
   const isCorrect = lastAnswer ? lastAnswer.selected === lastAnswer.correct : false
 
   function submitAnswer() {
@@ -2150,7 +2093,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   }
 
   if (mcqQuestions.length === 0) {
-    return <EmptyState icon={<BrainCircuit />} title="No multiple choice questions found" body="Try theory or gap-fill mode for this course." />
+    return <EmptyState icon={<BrainCircuit />} title="No multiple choice questions found" body="This course has no loaded questions in the API yet." />
   }
 
   if (finished) {
@@ -2269,182 +2212,22 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   )
 }
 
-function TheoryQuizMode({ code, courseTitle, questions }: { code: string; courseTitle: string; questions: Question[] }) {
-  const [index, setIndex] = useState(0)
-  const [answer, setAnswer] = useState('')
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean; score: number; expected: string } | null>(null)
-  const [results, setResults] = useState<boolean[]>([])
-  const current = questions[index]
-  const finished = index === questions.length
-  const score = results.filter(Boolean).length
-
-  function submitTheoryAnswer() {
-    if (!answer.trim() || !current) return
-    const result = scoreTheoryAnswer(answer, current)
-    setFeedback(result)
-    const next = [...results, result.isCorrect]
-    setResults(next)
-    if (next.length === questions.length) {
-      saveQuizAttempt({ courseCode: code, courseTitle, mode: 'theory', score: next.filter(Boolean).length, total: questions.length })
-    }
-  }
-
-  function nextQuestion() {
-    setAnswer('')
-    setFeedback(null)
-    setIndex((value) => value + 1)
-  }
-
-  if (finished) {
-    return <QuizCompletion mode="Theory" onRetake={() => { setResults([]); setIndex(0); setFeedback(null); setAnswer('') }} score={score} total={questions.length} />
-  }
-
-  return (
-    <div className="page-stack narrow">
-      <PageHeader eyebrow={`${code} theory`} title={`Theory question ${index + 1} of ${questions.length}`}>
-        <span className="score-chip">Score {score}</span>
-      </PageHeader>
-      <section className="quiz-card theory-card">
-        <div className="quiz-meta">
-          <span>{current.topic_name ?? 'General'}</span>
-          <span>{current.difficulty ?? 'Mixed difficulty'}</span>
-        </div>
-        <h2><LatexText text={current.question} /></h2>
-        <label>
-          Your answer
-          <textarea
-            disabled={feedback !== null}
-            onChange={(event) => setAnswer(event.target.value)}
-            placeholder="Explain your reasoning, formulas and final answer..."
-            value={answer}
-          />
-        </label>
-        {feedback && (
-          <div className={cx('feedback-card', feedback.isCorrect ? 'correct' : 'wrong')}>
-            <strong>{feedback.isCorrect ? 'Good answer' : 'Needs review'}</strong>
-            <p>Expected answer: <LatexText text={feedback.expected || 'See explanation below.'} /></p>
-            {current.explanation && <p><LatexText text={current.explanation} /></p>}
-          </div>
-        )}
-        {feedback ? (
-          <button className="primary-button full" onClick={nextQuestion} disabled={index === questions.length - 1 && finished}>
-            {index === questions.length - 1 ? 'Finish theory quiz' : 'Next question'}
-          </button>
-        ) : (
-          <button className="primary-button full" disabled={!answer.trim()} onClick={submitTheoryAnswer}>
-            Evaluate answer
-          </button>
-        )}
-      </section>
-    </div>
-  )
-}
-
-function GapFillQuizMode({ code, courseTitle, questions }: { code: string; courseTitle: string; questions: Question[] }) {
-  const [index, setIndex] = useState(0)
-  const [selected, setSelected] = useState('')
-  const [feedback, setFeedback] = useState<boolean | null>(null)
-  const [results, setResults] = useState<boolean[]>([])
-  const current = questions[index]
-  const gap = makeGapPrompt(current)
-  const finished = index === questions.length
-  const score = results.filter(Boolean).length
-
-  function submitGapAnswer() {
-    if (!selected) return
-    const isCorrect = normalizeText(selected) === normalizeText(gap.correct)
-    setFeedback(isCorrect)
-    const next = [...results, isCorrect]
-    setResults(next)
-    if (next.length === questions.length) {
-      saveQuizAttempt({ courseCode: code, courseTitle, mode: 'gap-fill', score: next.filter(Boolean).length, total: questions.length })
-    }
-  }
-
-  function nextQuestion() {
-    setSelected('')
-    setFeedback(null)
-    setIndex((value) => value + 1)
-  }
-
-  if (finished) {
-    return <QuizCompletion mode="Gap-fill" onRetake={() => { setResults([]); setIndex(0); setFeedback(null); setSelected('') }} score={score} total={questions.length} />
-  }
-
-  return (
-    <div className="page-stack narrow">
-      <PageHeader eyebrow={`${code} gap-fill`} title={`Gap ${index + 1} of ${questions.length}`}>
-        <span className="score-chip">Score {score}</span>
-      </PageHeader>
-      <section className="quiz-card">
-        <div className="quiz-meta">
-          <span>{current.topic_name ?? 'General'}</span>
-          <span>{current.difficulty ?? 'Mixed difficulty'}</span>
-        </div>
-        <h2><LatexText text={gap.statement} /></h2>
-        <div className="answers-list">
-          {gap.choices.map((choice, choiceIndex) => (
-            <button
-              className={cx(selected === choice && 'selected')}
-              disabled={feedback !== null}
-              key={`${choice}-${choiceIndex}`}
-              onClick={() => setSelected(choice)}
-            >
-              <span>{String.fromCharCode(65 + choiceIndex)}</span>
-              <p>{hasLatexSyntax(choice) ? <LatexText text={choice} /> : choice}</p>
-            </button>
-          ))}
-        </div>
-        {feedback !== null && (
-          <div className={cx('feedback-card', feedback ? 'correct' : 'wrong')}>
-            <strong>{feedback ? 'Correct' : 'Incorrect'}</strong>
-            <p>Correct answer: <LatexText text={gap.correct} /></p>
-            {current.explanation && <p><LatexText text={current.explanation} /></p>}
-          </div>
-        )}
-        {feedback === null ? (
-          <button className="primary-button full" disabled={!selected} onClick={submitGapAnswer}>Check answer</button>
-        ) : (
-          <button className="primary-button full" onClick={nextQuestion}>{index === questions.length - 1 ? 'Finish gap-fill quiz' : 'Next gap'}</button>
-        )}
-      </section>
-    </div>
-  )
-}
-
 function SchedulePage() {
   const [events, setEvents] = useStoredList<EventItem>(EVENTS_KEY, [])
   const [form, setForm] = useState({ title: '', course: '', date: todayIso(), start: '09:00', end: '10:00', venue: '' })
-  const [visibleMonth, setVisibleMonth] = useState(() => {
-    const [year, month] = todayIso().split('-').map(Number)
-    return new Date(year, month - 1, 1)
-  })
+  const [month, setMonth] = useState<Date>(new Date())
   const selectedDate = new Date(`${form.date}T00:00:00`)
   const todaysEvents = events.filter((event) => event.date === form.date).sort((a, b) => a.start.localeCompare(b.start))
   const eventsByDate = useMemo(() => events.reduce<Record<string, EventItem[]>>((dates, item) => {
     dates[item.date] = [...(dates[item.date] ?? []), item]
     return dates
   }, {}), [events])
-  const calendarDays = useMemo(() => {
-    const year = visibleMonth.getFullYear()
-    const month = visibleMonth.getMonth()
-    const firstDay = new Date(year, month, 1).getDay()
-    const totalDays = new Date(year, month + 1, 0).getDate()
-    return [
-      ...Array.from({ length: firstDay }, () => null),
-      ...Array.from({ length: totalDays }, (_, index) => new Date(year, month, index + 1)),
-    ]
-  }, [visibleMonth])
-  const selectedDateLabel = selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+  const selectedDateLabel = format(selectedDate, 'EEEE, MMMM d')
   const isEndBeforeStart = form.end <= form.start
   const canAddEvent = form.title.trim().length > 0 && !isEndBeforeStart
 
   function selectDate(date: Date) {
     setForm((value) => ({ ...value, date: dateToIso(date) }))
-  }
-
-  function changeMonth(offset: number) {
-    setVisibleMonth((value) => new Date(value.getFullYear(), value.getMonth() + offset, 1))
   }
 
   function addEvent(event: FormEvent<HTMLFormElement>) {
@@ -2458,53 +2241,83 @@ function SchedulePage() {
     setEvents(events.filter((event) => event.id !== id))
   }
 
+  const modifiers = {
+    today: (date: Date) => isToday(date),
+    selected: (date: Date) => isSameDay(date, selectedDate),
+    'has-events': (date: Date) => {
+      const iso = dateToIso(date)
+      return (eventsByDate[iso]?.length ?? 0) > 0
+    },
+  }
+
+  const eventVariants = {
+    hidden: { opacity: 0, y: 12 },
+    visible: (i: number) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: i * 0.06,
+        duration: 0.25,
+        ease: [0.23, 1, 0.32, 1],
+      },
+    }),
+    exit: {
+      opacity: 0,
+      x: -20,
+      transition: { duration: 0.18, ease: [0.23, 1, 0.32, 1] },
+    },
+  }
+
   return (
     <div className="page-stack">
       <PageHeader eyebrow="Planner" title="Schedule">
         <button className="ghost-button" onClick={() => selectDate(new Date())} type="button">Today</button>
       </PageHeader>
       <section className="schedule-shell">
-        <div className="section-card calendar-card">
-          <div className="calendar-toolbar">
-            <div>
-              <p className="eyebrow">Calendar</p>
-              <h2>{visibleMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
-            </div>
-            <div className="calendar-nav">
-              <button aria-label="Previous month" onClick={() => changeMonth(-1)} type="button"><ChevronLeft size={18} /></button>
-              <button aria-label="Next month" onClick={() => changeMonth(1)} type="button"><ChevronRight size={18} /></button>
-            </div>
-          </div>
-          <div className="calendar-weekdays" aria-hidden="true">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <span key={day}>{day}</span>)}
-          </div>
-          <div className="calendar-grid">
-            {calendarDays.map((date, index) => {
-              if (!date) return <span className="calendar-empty" key={`empty-${index}`} />
-              const iso = dateToIso(date)
-              const dayEvents = eventsByDate[iso] ?? []
-              const isSelected = iso === form.date
-              const isToday = iso === todayIso()
-              return (
-                <button
-                  className={cx('calendar-day', isSelected && 'selected', isToday && 'today')}
-                  key={iso}
-                  onClick={() => selectDate(date)}
-                  type="button"
-                >
-                  <span>{date.getDate()}</span>
-                  {dayEvents.length > 0 && <small>{dayEvents.length}</small>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
+        <motion.div
+          className="section-card calendar-card"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
+        >
+          <DayPicker
+            mode="single"
+            selected={selectedDate}
+            onDayClick={(date) => { if (date) selectDate(date) }}
+            month={month}
+            onMonthChange={setMonth}
+            showOutsideDays
+            modifiers={modifiers}
+            classNames={{
+              root: 'rdp-root',
+              months: 'rdp-months',
+              month_caption: 'rdp-month-caption',
+              nav: 'rdp-nav',
+              button_previous: 'rdp-nav-btn',
+              button_next: 'rdp-nav-btn',
+              month_grid: 'rdp-month-grid',
+              weekdays: 'rdp-weekdays',
+              weekday: 'rdp-weekday',
+              day: 'rdp-day',
+              day_button: 'rdp-day-btn',
+              selected: 'rdp-selected',
+              today: 'rdp-today',
+              outside: 'rdp-outside',
+              has_events: 'rdp-has-events',
+            }}
+          />
+        </motion.div>
 
         <div className="planner-grid">
-          <form className="section-card event-form polished-event-form" onSubmit={addEvent}>
+          <motion.form
+            className="section-card event-form polished-event-form"
+            onSubmit={addEvent}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.08, ease: [0.23, 1, 0.32, 1] }}
+          >
             <div className="event-form-heading">
               <div>
-                <p className="eyebrow">New calendar item</p>
                 <h2>Add to {selectedDateLabel}</h2>
               </div>
               <span className="score-chip">{todaysEvents.length} on this day</span>
@@ -2538,13 +2351,26 @@ function SchedulePage() {
               </label>
             </div>
             {isEndBeforeStart && <p className="form-error">End time must be later than the start time.</p>}
-            <button className="primary-button full" disabled={!canAddEvent} type="submit"><Plus size={18} /> Add to calendar</button>
-          </form>
-          <section className="section-card agenda-card">
+            <motion.button
+              className="primary-button full"
+              disabled={!canAddEvent}
+              type="submit"
+              whileTap={{ scale: 0.97 }}
+              transition={{ duration: 0.12, ease: [0.23, 1, 0.32, 1] }}
+            >
+              <Plus size={18} /> Add to calendar
+            </motion.button>
+          </motion.form>
+
+          <motion.section
+            className="section-card agenda-card"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.16, ease: [0.23, 1, 0.32, 1] }}
+          >
             <div className="section-title">
               <div>
-                <p className="eyebrow">Agenda</p>
-                <h2>{selectedDateLabel}</h2>
+                <h2>Agenda</h2>
               </div>
               <span className="score-chip">{todaysEvents.length} events</span>
             </div>
@@ -2552,19 +2378,37 @@ function SchedulePage() {
               <EmptyState icon={<CalendarDays />} title="No events for this date" body="Select a date on the calendar and add lectures, study sessions or assignment deadlines." />
             ) : (
               <div className="timeline-list">
-                {todaysEvents.map((item) => (
-                  <article key={item.id}>
-                    <time>{item.start} - {item.end}</time>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.course || 'Personal event'} {item.venue ? <><MapPin size={14} /> {item.venue}</> : ''}</p>
-                    </div>
-                    <button aria-label={`Remove ${item.title}`} onClick={() => removeEvent(item.id)} type="button"><X size={16} /></button>
-                  </article>
-                ))}
+                <AnimatePresence mode="popLayout">
+                  {todaysEvents.map((item, i) => (
+                    <motion.article
+                      key={item.id}
+                      custom={i}
+                      variants={eventVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      layout
+                    >
+                      <time>{item.start} – {item.end}</time>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p>{item.course || 'Personal event'} {item.venue ? <><MapPin size={14} /> {item.venue}</> : ''}</p>
+                      </div>
+                      <motion.button
+                        aria-label={`Remove ${item.title}`}
+                        onClick={() => removeEvent(item.id)}
+                        type="button"
+                        whileTap={{ scale: 0.9 }}
+                        transition={{ duration: 0.1 }}
+                      >
+                        <X size={16} />
+                      </motion.button>
+                    </motion.article>
+                  ))}
+                </AnimatePresence>
               </div>
             )}
-          </section>
+          </motion.section>
         </div>
       </section>
     </div>
@@ -3010,7 +2854,7 @@ function CourseAnalyticsPage() {
   const firebaseUser = useFirebaseUser()
   const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
   const [mastery, setMastery] = useState<MasteryRecord[]>([])
-  const [attempts, setAttempts] = useState<AdaptiveAttempt[]>([])
+  const [attempts, setAttempts] = useState<AttemptRecord[]>([])
   const [loading, setLoading] = useState(Boolean(userId))
   const [error, setError] = useState('')
 
@@ -3360,9 +3204,6 @@ function NotFoundPage() {
     </div>
   )
 }
-
-// Suppress unused-component warnings (used conditionally across module boundaries)
-void TheoryQuizMode; void GapFillQuizMode;
 
 function App() {
   // Apply saved theme/scheme on every mount

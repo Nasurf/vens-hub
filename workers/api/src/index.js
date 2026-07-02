@@ -272,7 +272,26 @@ export default {
         // Client sends their current KC state for this topic
         const topicName = question.topic_name;
         const courseCode = question.course_code;
-        const clientState = body.kcState || null;
+        let clientState = body.kcState || null;
+
+        // Server-side fallback: if client state is missing, load from D1
+        if (!clientState && userId) {
+          const { results: existingMastery } = await db.prepare(
+            'SELECT mastery_prob, s_parameter, status, total_attempts, correct_attempts, last_attempt_at, next_review_due FROM user_mastery WHERE user_id = ? AND course_code = ? AND topic_name = ?'
+          ).bind(userId, courseCode, topicName).all();
+          if (existingMastery.length > 0) {
+            const row = existingMastery[0];
+            clientState = {
+              masteryProb: row.mastery_prob,
+              sParameter: row.s_parameter,
+              status: row.status,
+              totalAttempts: row.total_attempts,
+              correctAttempts: row.correct_attempts,
+              lastAttemptAt: row.last_attempt_at,
+              nextReviewDue: row.next_review_due,
+            };
+          }
+        }
 
         // Run BKT
         const { newState, masteryBefore, masteryAfter } = applyBktUpdate(clientState, isCorrect, DEFAULT_PARAMS);
