@@ -2,196 +2,333 @@
 
 Base URL: `https://vens-hub-api.nasurf25.workers.dev`
 
-Cloudflare Worker backed by D1 database (`vens-hub-questions`). 9 engineering departments, 426 courses, ~142K questions.
+Cloudflare Worker backed by D1 database (`vens-hub-questions`). 9 engineering departments, 426 courses, ~142K questions + user performance monitoring.
 
 ---
 
-## Endpoints
+## Authentication
+
+**All user-scoped endpoints** require the `X-User-Id` header set to the Firebase Auth UID:
+
+```
+X-User-Id: <firebase-uid>
+```
+
+The header is passed by the Flutter/web client after the user logs in via Firebase Auth. The Worker trusts this value (hackathon scope — add token verification later for production).
+
+---
+
+## Content endpoints (no auth required)
 
 ### Health check
-
 ```
 GET /health
 ```
-
-Response:
-```json
-{ "status": "ok", "db": "vens-hub-questions" }
-```
+Response: `{ "status": "ok", "db": "vens-hub-questions" }`
 
 ### List all departments
-
 ```
 GET /departments
 ```
-
-Response:
-```json
-{
-  "departments": [
-    { "name": "AERONAUTICAL ENGINEERING", "code": "AER", "course_count": 93 },
-    { "name": "BIOMEDICAL ENGINEERING",   "code": "BIO", "course_count": 107 },
-    { "name": "CHEMICAL ENGINEERING",     "code": "CHE", "course_count": 95 },
-    { "name": "CIVIL ENGINEERING",         "code": "CIV", "course_count": 108 },
-    { "name": "COMPUTER ENGINEERING",     "code": "COM", "course_count": 78 },
-    { "name": "ELECTRICAL AND ELECTRONICS ENGINEERING", "code": "ELE", "course_count": 102 },
-    { "name": "MECHANICAL ENGINEERING",   "code": "MEC", "course_count": 96 },
-    { "name": "MECHATRONICS ENGINEERING", "code": "MCT", "course_count": 80 },
-    { "name": "PETROLEUM ENGINEERING",    "code": "PET", "course_count": 72 }
-  ]
-}
-```
-
-### List courses for a department
-
-```
-GET /departments/:code/courses
-```
-
-Example: `/departments/AER/courses`
-
-Response:
-```json
-{
-  "courses": [
-    { "code": "AAE 101", "title": "INTRODUCTION TO AEROSPACE ENGINEERING", "type": "CORE", "units": 2, "levels": "[\"100\"]", "description": "...", "question_count": 540 }
-  ]
-}
-```
+Response: `{ "departments": [{ "name", "code", "course_count" }, ...] }`
 
 **Department codes:** `AER`, `BIO`, `CHE`, `CIV`, `COM`, `ELE`, `MEC`, `MCT`, `PET`
 
-### List all courses
+### List courses for a department
+```
+GET /departments/:code/courses
+```
+Example: `/departments/AER/courses`
 
+### List all courses
 ```
 GET /courses
 ```
 
-Returns all 426 courses with metadata (department, question count).
-
 ### Get a single course
-
 ```
 GET /courses/:courseCode
 ```
-
-Example: `/courses/AAE%20101` (URL-encoded space)
-
-Response:
-```json
-{
-  "course": {
-    "code": "AAE 101",
-    "title": "INTRODUCTION TO AEROSPACE ENGINEERING",
-    "type": "CORE",
-    "units": 2,
-    "levels": "[\"100\"]",
-    "semesters": "[\"FIRST\"]",
-    "description": "...",
-    "outline": "[\"Aerodynamics and Flight Mechanics\", ...]",
-    "department": "AERONAUTICAL ENGINEERING",
-    "department_code": "AER",
-    "question_count": 540
-  }
-}
-```
+Example: `/courses/AAE%20101` (URL-encode spaces)
 
 ### Get questions for a course
-
 ```
+GET /courses/:courseCode/questions
 GET /questions/:courseCode
 ```
-
-Example: `/questions/AAE%20101`
-
-Response:
-```json
-{
-  "questions": [
-    {
-      "id": 162512,
-      "topic_name": "Aerodynamics and Flight Mechanics",
-      "subtopic_name": "Aircraft Stability",
-      "question_type": "calculation",
-      "difficulty": "Easy",
-      "difficulty_ranking": 2,
-      "question": "An aircraft wing produces a lift of $75\\,\\text{kN}$...",
-      "options": "[\"$-38.0\\,\\text{kN\\cdot m}$\", ...]",
-      "correct_answer_index": 0,
-      "correct_answer": "A",
-      "correct_answer_text": "$-38.0\\,\\text{kN\\cdot m}$",
-      "explanation": "The total pitching moment about the CG...",
-      "solution_steps": "[\"Formula: $M_{CG} = M_{AC} + L(x_{CG} - x_{AC})$\", ...]",
-      "rag_sources": "[{\"ref_id\": \"...\", \"path\": \"...\", ...}]"
-    }
-  ],
-  "count": 540
-}
-```
-
-**Note:** Course codes with spaces must be URL-encoded. `AAE 101` → `AAE%20101`.
+Example: `/courses/AAE%20101/questions`
+Returns array of question objects with topic, options, correct answer, explanation.
 
 ---
 
-## Flutter usage
+## Adaptive endpoints (stateless BKT)
 
-Add to `assets/.env`:
+### Submit answer (single)
 ```
-API_BASE_URL=https://vens-hub-api.nasurf25.workers.dev
+POST /adaptive/submit-answer
+```
+Request body:
+```json
+{
+  "questionId": 162512,
+  "selectedAnswerIndex": 0,
+  "attemptId": "<uuid>",
+  "clientElapsedSeconds": 30,
+  "kcState": null
+}
+```
+- `kcState` — optional, the current KC state for this topic (null on first attempt)
+- `attemptId` — client-generated UUID for dedup
+
+Response:
+```json
+{
+  "status": "applied",
+  "isCorrect": true,
+  "masteryBefore": 0.15,
+  "masteryAfter": 0.43,
+  "sParameter": 1.0,
+  "kcStatus": "learning",
+  "totalAttempts": 1,
+  "correctAttempts": 1,
+  "updatedKcState": { ... }
+}
 ```
 
-Then in `lib/core/config/environment_config.dart`:
-```dart
-static String get apiBaseUrl => dotenv.env['API_BASE_URL'] ?? '';
+If `X-User-Id` header is set, the Worker additionally:
+1. **Inserts** a row into `user_attempts` (answer log)
+2. **Upserts** the mastery state into `user_mastery`
+
+### Submit batch (quiz completion)
 ```
+POST /adaptive/submit-batch
+```
+Used by the Flutter completion screen to sync quiz results to the adaptive engine.
+Accepts per-topic results and runs BKT for each.
 
-### Example HTTP call (using `http` package)
+Request body:
+```json
+{
+  "results": [
+    { "topicName": "Aerodynamics", "courseCode": "AAE 101", "isCorrect": true },
+    { "topicName": "Aerodynamics", "courseCode": "AAE 101", "isCorrect": false }
+  ]
+}
+```
+Response: `{ "status": "applied", "count": 2 }`
 
-```dart
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:vens_hub/core/config/environment_config.dart';
+Each result:
+- `topicName` — topic/KC name (maps to question topics in D1)
+- `courseCode` — course code
+- `isCorrect` — whether the answer was correct
 
-class QuestionsApiService {
-  final String _baseUrl = EnvironmentConfig.apiBaseUrl;
+The Worker loads existing mastery from D1 (if any), runs BKT, inserts attempt log, and upserts mastery.
 
-  Future<List<dynamic>> getQuestions(String courseCode) async {
-    final encoded = Uri.encodeComponent(courseCode);
-    final uri = Uri.parse('$_baseUrl/questions/$encoded');
-    final response = await http.get(uri);
+### Get state summary (course aggregation)
+```
+POST /adaptive/state
+```
+Request: `{ "kcStates": { "<topic>": { "masteryProb": 0.85, ... }, ... } }`
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['questions'];
+Response:
+```json
+{
+  "courses": {
+    "AAE 101": {
+      "masteryAvg": 0.72,
+      "totalKcs": 5,
+      "masteredKcs": 3,
+      "status": "learning"
     }
-    throw Exception('Failed to load questions: ${response.statusCode}');
-  }
-
-  Future<List<dynamic>> getCourses() async {
-    final uri = Uri.parse('$_baseUrl/courses');
-    final response = await http.get(uri);
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['courses'];
-    }
-    throw Exception('Failed to load courses: ${response.statusCode}');
   }
 }
 ```
+
+---
+
+## User Performance endpoints (require `X-User-Id`)
+
+### Get all mastery records
+```
+GET /user/mastery
+Header: X-User-Id: <firebase-uid>
+```
+Returns every KC (topic) the user has studied:
+```json
+{
+  "topics": [
+    {
+      "topic_name": "Aerodynamics",
+      "course_code": "AAE 101",
+      "mastery_prob": 0.85,
+      "s_parameter": 4.0,
+      "status": "reviewing",
+      "total_attempts": 12,
+      "correct_attempts": 9,
+      "last_attempt_at": "2026-07-02T10:30:00.000Z",
+      "next_review_due": "2026-07-06T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+### Get mastery for a specific course
+```
+GET /user/mastery/:courseCode
+Header: X-User-Id: <firebase-uid>
+```
+Example: `/user/mastery/AAE%20101`
+
+Returns per-topic mastery plus course aggregates:
+```json
+{
+  "courseCode": "AAE 101",
+  "topics": [ ... ],
+  "avgMastery": 0.72,
+  "masteredKcs": 3,
+  "totalKcs": 5
+}
+```
+
+### Get course-level stats
+```
+GET /user/stats
+Header: X-User-Id: <firebase-uid>
+```
+Returns rollup stats per course:
+```json
+{
+  "courses": {
+    "AAE 101": {
+      "totalKcs": 5,
+      "masteredKcs": 3,
+      "avgMastery": 0.72,
+      "totalAttempts": 42,
+      "correctAttempts": 31,
+      "lastActivityAt": "2026-07-02T10:30:00.000Z"
+    }
+  }
+}
+```
+
+### Get attempt history (paginated)
+```
+GET /user/attempts?course=AAE%20101&limit=50&cursor=2026-07-01T12:00:00.000Z
+Header: X-User-Id: <firebase-uid>
+```
+Optional query params:
+- `course` — filter by course code
+- `limit` — page size (default 50, max 200)
+- `cursor` — ISO 8601 timestamp for cursor-based pagination (use `nextCursor` from previous response)
+
+Response:
+```json
+{
+  "attempts": [
+    {
+      "id": "<uuid>",
+      "user_id": "<uid>",
+      "question_id": 162512,
+      "course_code": "AAE 101",
+      "topic_name": "Aerodynamics",
+      "is_correct": 1,
+      "selected_answer_index": 0,
+      "elapsed_seconds": 30,
+      "mastery_before": 0.15,
+      "mastery_after": 0.43,
+      "created_at": "2026-07-02T10:30:00.000Z"
+    }
+  ],
+  "nextCursor": "2026-07-01T09:15:00.000Z",
+  "limit": 50
+}
+```
+
+### Seed mastery from client cache
+```
+POST /user/seed-mastery
+Header: X-User-Id: <firebase-uid>
+```
+One-time upload for migrating existing local KC states (from Flutter's get_storage) to the server:
+```json
+{
+  "kcStates": {
+    "<topic_name>": {
+      "masteryProb": 0.85,
+      "sParameter": 4.0,
+      "status": "reviewing",
+      "totalAttempts": 10,
+      "correctAttempts": 8,
+      "lastAttemptAt": "2026-07-01T10:00:00.000Z"
+    }
+  }
+}
+```
+Response: `{ "seeded": 12, "message": "Seeded 12 KC states for user <uid>" }`
 
 ---
 
 ## Error responses
 
-**404 Not found:**
+**400 — Bad request:**
+```json
+{ "error": "questionId, selectedAnswerIndex, and attemptId required" }
+```
+**401 — Missing auth:**
+```json
+{ "error": "X-User-Id header required" }
+```
+**404 — Not found:**
 ```json
 { "error": "Not found" }
 ```
-
-**500 Internal error:**
+**500 — Internal error:**
 ```json
 { "error": "Internal error: <message>" }
+```
+
+---
+
+## D1 schema
+
+### Static data
+- `courses` — 426 engineering courses
+- `departments` — 9 departments
+- `questions` — ~142K questions with topic, difficulty, options
+
+### User performance
+- `user_attempts` — per-answer log (pk: uuid, indexed on user+course+created)
+- `user_mastery` — per-KC master state (pk: user_id, course_code, topic_name)
+
+```sql
+CREATE TABLE user_attempts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  question_id INTEGER NOT NULL,
+  course_code TEXT NOT NULL,
+  topic_name TEXT DEFAULT '',
+  is_correct INTEGER NOT NULL,
+  selected_answer_index INTEGER NOT NULL,
+  elapsed_seconds INTEGER DEFAULT 0,
+  mastery_before REAL DEFAULT 0.15,
+  mastery_after REAL DEFAULT 0.15,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE user_mastery (
+  user_id TEXT NOT NULL,
+  course_code TEXT NOT NULL,
+  topic_name TEXT NOT NULL,
+  mastery_prob REAL DEFAULT 0.15,
+  s_parameter REAL DEFAULT 1.0,
+  status TEXT DEFAULT 'learning',
+  total_attempts INTEGER DEFAULT 0,
+  correct_attempts INTEGER DEFAULT 0,
+  last_attempt_at TEXT NOT NULL,
+  next_review_due TEXT DEFAULT '',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, course_code, topic_name)
+);
 ```
 
 ---
@@ -200,7 +337,7 @@ class QuestionsApiService {
 
 ```bash
 cd workers/api
-wrangler deploy --env=""
+npx wrangler deploy --env=""
 ```
 
-The Worker is in `workers/api/src/index.js` with D1 binding `QUESTIONS_DB` pointing to `vens-hub-questions`.
+The Worker is at `workers/api/src/index.js` with D1 binding `QUESTIONS_DB` → `vens-hub-questions`.
