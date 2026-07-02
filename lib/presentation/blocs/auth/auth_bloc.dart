@@ -404,41 +404,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             emit(AuthFailureState('Something went wrong. Please try again.'));
             return;
           }
-          final isVerified = authSvc.currentUser?.emailVerified ?? false;
-          if (isVerified) {
-            await analyticsService.logAuthEvent(
-              authAction: 'app_start_authenticated',
-              method: 'session',
-              success: true,
-            );
-            await analyticsService.logUserJourney(
-              fromScreen: 'app_start',
-              toScreen: 'authenticated_home',
-              action: 'session_restored',
-              context: {
-                'user_id': user.id ?? 'unknown',
-                'department': user.department,
-                'level': user.level,
-              },
-            );
-            emit(Authenticated(user));
-          } else {
-            await analyticsService.logAuthEvent(
-              authAction: 'app_start_awaiting_verification',
-              method: 'session',
-              success: false,
-              errorCode: 'email_not_verified',
-            );
-            emit(
-              AuthAwaitingVerification(
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                level: user.level,
-                department: user.department,
-              ),
-            );
-          }
+          await analyticsService.logAuthEvent(
+            authAction: 'app_start_authenticated',
+            method: 'session',
+            success: true,
+          );
+          await analyticsService.logUserJourney(
+            fromScreen: 'app_start',
+            toScreen: 'authenticated_home',
+            action: 'session_restored',
+            context: {
+              'user_id': user.id ?? 'unknown',
+              'department': user.department,
+              'level': user.level,
+            },
+          );
+          emit(Authenticated(user));
         } else {
           await analyticsService.logAuthEvent(
             authAction: 'app_start_no_session',
@@ -630,42 +611,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthFailureState('Something went wrong. Please try again.'));
           return;
         }
-        final isVerified = authSvc.currentUser?.emailVerified ?? false;
-        if (isVerified) {
-          await analyticsService.logUserJourney(
-            fromScreen: 'sign_up',
-            toScreen: 'authenticated_home',
-            action: 'successful_sign_up_verified',
-            context: {
-              'user_id': user.id ?? 'unknown',
-              'department': user.department,
-              'level': user.level,
-            },
-          );
-          emit(Authenticated(user));
-        } else {
-          // Ensure a verification email is sent proactively
-          await sendVerificationEmailUseCase(NoParams());
-          await analyticsService.logUserJourney(
-            fromScreen: 'sign_up',
-            toScreen: 'email_verification',
-            action: 'successful_sign_up_awaiting_verification',
-            context: {
-              'user_id': user.id ?? 'unknown',
-              'department': user.department,
-              'level': user.level,
-            },
-          );
-          emit(
-            AuthAwaitingVerification(
-              email: user.email,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              level: user.level,
-              department: user.department,
-            ),
-          );
-        }
+        await analyticsService.logUserJourney(
+          fromScreen: 'sign_up',
+          toScreen: 'authenticated_home',
+          action: 'successful_sign_up_verified',
+          context: {
+            'user_id': user.id ?? 'unknown',
+            'department': user.department,
+            'level': user.level,
+          },
+        );
+        emit(Authenticated(user));
       },
     );
   }
