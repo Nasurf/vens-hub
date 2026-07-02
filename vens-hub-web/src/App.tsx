@@ -66,7 +66,7 @@ import {
   signOutUser,
   hasFirebaseConfig,
 } from './firebase'
-import { LatexText } from './LatexText'
+import { hasLatexSyntax, LatexText } from './LatexText'
 import {
   submitBatchResults,
   getUserStats,
@@ -2203,7 +2203,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
                 disabled={showResult}
               >
                 <span>{String.fromCharCode(65 + optionIndex)}</span>
-                <p><LatexText text={option} /></p>
+                <p>{hasLatexSyntax(option) ? <LatexText text={option} /> : option}</p>
                 {showResult && isCorrectAnswer && <CheckCircle2 size={20} className="answer-icon correct-icon" />}
                 {showResult && isSelected && !isCorrectAnswer && <AlertCircle size={20} className="answer-icon wrong-icon" />}
               </button>
@@ -2382,7 +2382,7 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
               onClick={() => setSelected(choice)}
             >
               <span>{String.fromCharCode(65 + choiceIndex)}</span>
-              <p><LatexText text={choice} /></p>
+              <p>{hasLatexSyntax(choice) ? <LatexText text={choice} /> : choice}</p>
             </button>
           ))}
         </div>

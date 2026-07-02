@@ -1,23 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL
 
-if (!API_BASE) {
-  throw new Error('VITE_API_BASE_URL is required — copy env.example to .env.local and set it')
-}
-
-type BatchResult = {
-  topicName: string
-  courseCode: string
-  isCorrect: boolean
-}
-
-export type CourseStats = {
-  totalKcs: number
-  masteredKcs: number
-  avgMastery: number
-  totalAttempts: number
-  correctAttempts: number
-  lastActivityAt: string
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type MasteryRecord = {
   topic_name: string
@@ -31,71 +14,109 @@ export type MasteryRecord = {
   next_review_due: string
 }
 
-export type AdaptiveAttempt = {
+export type CourseStats = {
+  totalKcs: number
+  masteredKcs: number
+  avgMastery: number
+  totalAttempts: number
+  correctAttempts: number
+  lastActivityAt: string
+}
+
+export type AttemptRecord = {
   id: string
-  user_id: string
-  question_id?: number | string | null
+  question_id: number
   course_code: string
   topic_name: string
-  is_correct: number | boolean
-  selected_answer_index?: number | null
-  elapsed_seconds?: number | null
+  is_correct: number
+  selected_answer_index: number
+  elapsed_seconds: number
   mastery_before: number
   mastery_after: number
   created_at: string
 }
 
-type RequestOptions = RequestInit & { userId?: string }
-
-async function adaptiveFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { userId, headers, ...init } = options
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(userId ? { 'X-User-Id': userId } : {}),
-      ...headers,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Adaptive request failed (${response.status})`)
-  }
-
-  return response.json() as Promise<T>
+export type BatchResultItem = {
+  topicName: string
+  courseCode: string
+  isCorrect: boolean
 }
 
-export function submitBatchResults(userId: string, results: BatchResult[]) {
-  return adaptiveFetch<{ status: string; count: number }>('/adaptive/submit-batch', {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function headers(userId?: string): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (userId) h['X-User-Id'] = userId
+  return h
+}
+
+async function apiGet<T>(path: string, userId?: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { headers: headers(userId) })
+  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
+  return res.json() as Promise<T>
+}
+
+async function apiPost<T>(path: string, body: unknown, userId?: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    userId,
-    body: JSON.stringify({ results }),
+    headers: headers(userId),
+    body: JSON.stringify(body),
   })
+  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`)
+  return res.json() as Promise<T>
 }
 
-export function getUserStats(userId: string) {
-  return adaptiveFetch<{ courses: Record<string, CourseStats> }>('/user/stats', { userId })
+// ─── Adaptive Endpoints ──────────────────────────────────────────────────────
+
+export async function submitBatchResults(
+  userId: string,
+  results: BatchResultItem[],
+): Promise<{ status: string; count: number }> {
+  return apiPost('/adaptive/submit-batch', { results }, userId)
 }
 
-export function getUserMastery(userId: string) {
-  return adaptiveFetch<{ topics: MasteryRecord[] }>('/user/mastery', { userId })
+// ─── User Performance Endpoints ──────────────────────────────────────────────
+
+export async function getUserStats(
+  userId: string,
+): Promise<{ courses: Record<string, CourseStats> }> {
+  return apiGet('/user/stats', userId)
 }
 
-export function getCourseMastery(userId: string, courseCode: string) {
-  return adaptiveFetch<{
-    courseCode: string
-    topics: MasteryRecord[]
-    avgMastery: number
-    masteredKcs: number
-    totalKcs: number
-  }>(`/user/mastery/${encodeURIComponent(courseCode)}`, { userId })
+export async function getUserMastery(
+  userId: string,
+): Promise<{ topics: MasteryRecord[] }> {
+  return apiGet('/user/mastery', userId)
 }
 
-export function getUserAttempts(userId: string, courseCode?: string, limit = 100) {
-  const params = new URLSearchParams({ limit: String(limit) })
-  if (courseCode) params.set('course', courseCode)
-  return adaptiveFetch<{ attempts: AdaptiveAttempt[]; nextCursor: string | null; limit: number }>(
-    `/user/attempts?${params.toString()}`,
-    { userId },
-  )
+export async function getUserMasteryForCourse(
+  userId: string,
+  courseCode: string,
+): Promise<{
+  courseCode: string
+  topics: MasteryRecord[]
+  avgMastery: number
+  masteredKcs: number
+  totalKcs: number
+}> {
+  return apiGet(`/user/mastery/${encodeURIComponent(courseCode)}`, userId)
+}
+
+export async function getUserAttempts(
+  userId: string,
+  params: { course?: string; limit?: number; cursor?: string } = {},
+): Promise<{ attempts: AttemptRecord[]; nextCursor: string | null; limit: number }> {
+  const searchParams = new URLSearchParams()
+  if (params.course) searchParams.set('course', params.course)
+  if (params.limit) searchParams.set('limit', String(params.limit))
+  if (params.cursor) searchParams.set('cursor', params.cursor)
+  const qs = searchParams.toString()
+  return apiGet(`/user/attempts${qs ? `?${qs}` : ''}`, userId)
+}
+
+export async function seedMastery(
+  userId: string,
+  kcStates: Record<string, Record<string, unknown>>,
+): Promise<{ seeded: number; message: string }> {
+  return apiPost('/user/seed-mastery', { kcStates }, userId)
 }
