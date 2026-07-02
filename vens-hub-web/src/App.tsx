@@ -1476,7 +1476,9 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
       <section className="assistant-panel">
         <header>
           <div>
-            <Bot />
+            <span>
+              <Bot size={22} />
+            </span>
             <div>
               <p className="eyebrow">AI Assistant</p>
               <h2>Study helper</h2>
@@ -1539,9 +1541,6 @@ function DashboardPage() {
           <p>
             Track your selected courses, take quizzes, and monitor your progress all in one place.
           </p>
-          <Link to="/app/courses" className="primary-button">
-            Start studying <ChevronRight size={18} />
-          </Link>
         </div>
         <img src="/brand/hub.svg" alt="Vens Hub mark" />
       </section>
@@ -1991,25 +1990,36 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [answers, setAnswers] = useState<Array<{ selected: number; correct: number }>>([])
+  const [showResult, setShowResult] = useState(false)
+  const [showExplanation, setShowExplanation] = useState(false)
+  const [finished, setFinished] = useState(false)
   const current = mcqQuestions[index]
-  const finished = mcqQuestions.length > 0 && answers.length === mcqQuestions.length
   const score = answers.filter((answer) => answer.selected === answer.correct).length
+  const lastAnswer = answers[answers.length - 1]
+  const isCorrect = lastAnswer ? lastAnswer.selected === lastAnswer.correct : false
 
   function submitAnswer() {
     if (selected === null || !current) return
     const next = [...answers, { selected, correct: answerIndex(current) }]
     setAnswers(next)
+    setShowResult(true)
+  }
+
+  function nextQuestion() {
     setSelected(null)
-    if (next.length < mcqQuestions.length) {
-      setIndex((value) => value + 1)
-    } else {
+    setShowResult(false)
+    setShowExplanation(false)
+    if (answers.length >= mcqQuestions.length) {
+      setFinished(true)
       saveQuizAttempt({
         courseCode: code,
         courseTitle,
         mode: 'multiple-choice',
-        score: next.filter((answer) => answer.selected === answer.correct).length,
+        score: answers.filter((answer) => answer.selected === answer.correct).length,
         total: mcqQuestions.length,
       })
+    } else {
+      setIndex((value) => value + 1)
     }
   }
 
@@ -2018,11 +2028,12 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   }
 
   if (finished) {
-    return <QuizCompletion mode="Multiple choice" onRetake={() => { setAnswers([]); setIndex(0) }} score={score} total={mcqQuestions.length} />
+    return <QuizCompletion mode="Multiple choice" onRetake={() => { setAnswers([]); setIndex(0); setShowResult(false); setShowExplanation(false); setFinished(false) }} score={score} total={mcqQuestions.length} />
   }
 
   const options = questionOptions(current)
   const progress = ((index) / mcqQuestions.length) * 100
+  const solutionSteps = parseJsonList(current.solution_steps)
   
   return (
     <div className="page-stack narrow">
@@ -2039,20 +2050,78 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
         </div>
         <h2>{displayText(current.question)}</h2>
         <div className="answers-list">
-          {options.map((option, optionIndex) => (
-            <button
-              className={cx(selected === optionIndex && 'selected')}
-              key={`${option}-${optionIndex}`}
-              onClick={() => setSelected(optionIndex)}
-            >
-              <span>{String.fromCharCode(65 + optionIndex)}</span>
-              <p>{displayText(option)}</p>
-            </button>
-          ))}
+          {options.map((option, optionIndex) => {
+            const isSelected = selected === optionIndex
+            const isCorrectAnswer = optionIndex === answerIndex(current)
+            let buttonClass = ''
+            
+            if (showResult) {
+              if (isCorrectAnswer) buttonClass = 'correct'
+              else if (isSelected && !isCorrectAnswer) buttonClass = 'wrong'
+            } else if (isSelected) {
+              buttonClass = 'selected'
+            }
+            
+            return (
+              <button
+                className={buttonClass}
+                key={`${option}-${optionIndex}`}
+                onClick={() => !showResult && setSelected(optionIndex)}
+                disabled={showResult}
+              >
+                <span>{String.fromCharCode(65 + optionIndex)}</span>
+                <p>{displayText(option)}</p>
+                {showResult && isCorrectAnswer && <CheckCircle2 size={20} className="answer-icon correct-icon" />}
+                {showResult && isSelected && !isCorrectAnswer && <AlertCircle size={20} className="answer-icon wrong-icon" />}
+              </button>
+            )
+          })}
         </div>
-        <button className="primary-button full" disabled={selected === null} onClick={submitAnswer}>
-          {index === mcqQuestions.length - 1 ? 'Finish quiz' : 'Next question'}
-        </button>
+        
+        {!showResult ? (
+          <button className="primary-button full" disabled={selected === null} onClick={submitAnswer}>
+            Check answer
+          </button>
+        ) : (
+          <div className="quiz-feedback-section">
+            <div className={cx('quiz-result-badge', isCorrect ? 'correct' : 'wrong')}>
+              {isCorrect ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+              <span>{isCorrect ? 'Correct!' : 'Incorrect'}</span>
+            </div>
+            
+            {!showExplanation ? (
+              <button className="ghost-button full" onClick={() => setShowExplanation(true)}>
+                {current.explanation || solutionSteps.length > 0 ? 'View explanation' : 'Continue'}
+              </button>
+            ) : (
+              <div className="quiz-explanation-panel">
+                <div className="explanation-answer">
+                  <strong>Correct answer:</strong> {String.fromCharCode(65 + answerIndex(current))}. {displayText(current.correct_answer_text || options[answerIndex(current)])}
+                </div>
+                {current.explanation && (
+                  <div className="explanation-text">
+                    <strong>Explanation:</strong>
+                    <p>{displayText(current.explanation)}</p>
+                  </div>
+                )}
+                {solutionSteps.length > 0 && (
+                  <div className="explanation-steps">
+                    <strong>Solution steps:</strong>
+                    <ol>
+                      {solutionSteps.map((step, i) => (
+                        <li key={i}>{displayText(step)}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <button className="primary-button full" onClick={nextQuestion}>
+              {answers.length >= mcqQuestions.length ? 'Finish quiz' : 'Next question'}
+            </button>
+          </div>
+        )}
       </section>
     </div>
   )
@@ -2444,12 +2513,10 @@ function ProfilePage() {
       {/* Hero */}
       <section className="profile-hero profile-stagger" style={{ animationDelay: '0ms' }}>
         <div className="profile-avatar-wrap">
-          <div className="profile-avatar-gradient">
-            <div className="profile-avatar-inner">
-              {draft.firstName || draft.lastName
-                ? getInitials(draft.firstName, draft.lastName)
-                : <User size={32} />}
-            </div>
+          <div className="profile-avatar-inner">
+            {draft.firstName || draft.lastName
+              ? getInitials(draft.firstName, draft.lastName)
+              : <User size={32} />}
           </div>
         </div>
         <h1>{draft.firstName || 'Engineer'} {draft.lastName}</h1>
