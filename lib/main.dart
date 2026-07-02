@@ -459,8 +459,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 'lastName': state.lastName,
               },
             );
-          } else if (state is AuthAwaitingVerification) {
-            Get.offAllNamed(AppRoutes.emailVerification);
           } else if (state is Unauthenticated) {
             Get.offAllNamed(AppRoutes.onBoarding);
           }

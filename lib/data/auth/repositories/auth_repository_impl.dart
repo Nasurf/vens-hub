@@ -121,8 +121,6 @@ class AuthRepositoryImpl implements AuthRepository {
             firebaseUser.emailVerified, // Pass email verification status
       );
 
-      // After successful sign-up and profile creation, emit AuthAwaitingVerification
-      // The AuthBloc will then navigate to the EmailVerificationScreen
       return Right(userModel);
     } on NetworkException catch (e) {
       return Left(NetworkFailure(message: e.message));
@@ -490,36 +488,6 @@ class AuthRepositoryImpl implements AuthRepository {
           message:
               'An unknown error occurred while saving user profile: ${e.toString()}',
         ),
-      );
-    }
-  }
-
-  @override
-  Future<Either<Failure, void>> sendVerificationEmail() async {
-    try {
-      await authService.sendEmailVerification();
-      return const Right(null);
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(message: e.message));
-    } on AuthenticationException catch (e) {
-      return Left(AuthenticationFailure(message: e.message));
-    } catch (e) {
-      return Left(UnknownFailure(message: "Unable to send verification email"));
-    }
-  }
-
-  @override
-  Future<Either<Failure, bool>> checkEmailVerification() async {
-    try {
-      final isVerified = await authService.isEmailVerified();
-      return Right(isVerified);
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(message: e.message));
-    } on AuthenticationException catch (e) {
-      return Left(AuthenticationFailure(message: e.message));
-    } catch (e) {
-      return Left(
-        UnknownFailure(message: "Unable to verify if email is validated"),
       );
     }
   }

@@ -18,8 +18,6 @@ class AuthGoogleSignInLoading extends AuthState {}
 
 class AuthSignUpLoading extends AuthState {}
 
-class AuthEmailVerificationLoading extends AuthState {}
-
 class Authenticated extends AuthState {
   final UserModel authUser;
 
@@ -30,25 +28,6 @@ class Authenticated extends AuthState {
 }
 
 class Unauthenticated extends AuthState {}
-
-class AuthAwaitingVerification extends AuthState {
-  final String email;
-  final String firstName;
-  final String lastName;
-  final String level;
-  final String department;
-
-  const AuthAwaitingVerification({
-    required this.email,
-    required this.firstName,
-    required this.lastName,
-    required this.level,
-    required this.department,
-  });
-
-  @override
-  List<Object?> get props => [email, firstName, lastName, level, department];
-}
 
 class AuthFailureState extends AuthState {
   // Renamed to avoid clash with Failure class

@@ -23,8 +23,6 @@ abstract class AuthService {
   Stream<fb_auth.User?> authStateChanges();
   Future<void> signOut();
   Future<fb_auth.User?> getCurrentFirebaseUser();
-  Future<void> sendEmailVerification(); // New method
-  Future<bool> isEmailVerified(); // New method
   Future<void> forgotPassword();
 
   Future<void> reloadCurrentUser();

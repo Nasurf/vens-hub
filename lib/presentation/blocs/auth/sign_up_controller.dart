@@ -7,7 +7,6 @@ import 'package:vens_hub/presentation/blocs/auth/auth_event.dart'; // Re-add Aut
 // GetX AuthenticationRepository is removed from here
 // RegistrationOnboardingModel is not directly used here now, AuthSignUpRequested takes individual fields
 // AppRouter and Routes are used by UI listening to AuthBloc state, not directly by controller for this action
-// EmailVerificationScreenArgs is used by UI listening to AuthBloc state
 
 class SignUpController extends GetxController {
   // final AuthenticationRepository _authRepository = Get.find(); // Removed
@@ -206,7 +205,6 @@ class SignUpController extends GetxController {
         department: departmentCode,
       ),
     );
-    // Navigation to EmailVerificationScreen will be handled by the UI
-    // listening to AuthBloc state changes (specifically AuthVerificationEmailSent state).
+    // Navigation after sign-up is handled by the UI listening to AuthBloc state changes.
   }
 }

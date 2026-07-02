@@ -31,7 +31,4 @@ abstract class AuthRepository {
     required String level,
     required String department,
   });
-
-  Future<Either<Failure, void>> sendVerificationEmail();
-  Future<Either<Failure, bool>> checkEmailVerification();
 }
