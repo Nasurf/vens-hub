@@ -55,6 +55,7 @@ import {
   registerWithEmail,
   loginWithGoogle,
   signOutUser,
+  hasFirebaseConfig,
 } from './firebase'
 
 type Department = {
@@ -746,7 +747,12 @@ function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await loginWithEmail(email, password)
+      if (hasFirebaseConfig) {
+        await loginWithEmail(email, password)
+      }
+      const existing = getProfile()
+      const profile: Profile = existing?.email === email ? existing : demoProfile(email)
+      saveProfile(profile)
       navigate('/app')
     } catch (err: any) {
       const code = err?.code || ''
@@ -792,7 +798,7 @@ function LoginPage() {
             Email address
             <span>
               <Mail size={18} />
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="engineer@example.com" disabled={loading} />
+              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="engineer@example.com" disabled={loading} aria-label="Email" />
             </span>
           </label>
           <label>
@@ -889,11 +895,13 @@ function RegisterPage() {
       setStep((value) => value + 1)
       return
     }
-    // Step 2 — create Firebase account
+    // Step 2 — create Firebase account (or mock fallback if not configured)
     setError('')
     setLoading(true)
     try {
-      await registerWithEmail(email, password)
+      if (hasFirebaseConfig) {
+        await registerWithEmail(email, password)
+      }
       if (!selectedDepartment) return
       saveProfile({
         firstName: firstName.trim(),
@@ -967,11 +975,11 @@ function RegisterPage() {
               <div className="two-col">
                 <label>
                   First name
-                  <input value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+                  <input value={firstName} onChange={(event) => setFirstName(event.target.value)} aria-label="First name" />
                 </label>
                 <label>
                   Last name
-                  <input value={lastName} onChange={(event) => setLastName(event.target.value)} />
+                  <input value={lastName} onChange={(event) => setLastName(event.target.value)} aria-label="Last name" />
                 </label>
               </div>
             </StepPanel>
@@ -1046,15 +1054,15 @@ function RegisterPage() {
               </div>
               <label>
                 Email address
-                <input value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />
+                <input value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} aria-label="Email" />
               </label>
               <label>
                 Create password
-                <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" disabled={loading} />
+                <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" disabled={loading} aria-label="Create password" />
               </label>
               <label>
                 Confirm password
-                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" disabled={loading} />
+                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" disabled={loading} aria-label="Confirm password" />
               </label>
               {error && <p className="form-error">{error}</p>}
               <button className="google-button full" type="button" onClick={handleGoogleSignUp} disabled={loading}>
@@ -1068,6 +1076,7 @@ function RegisterPage() {
               </button>
             </StepPanel>
           )}
+          {error && <p className="form-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
           <div className="signup-actions">
             <button className="ghost-button" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>
               Back
@@ -1137,9 +1146,9 @@ function RequireAuth() {
   if (firebaseUser === 'loading') {
     return <div className="page-stack narrow"><div className="loading-spinner" /></div>
   }
-  if (!firebaseUser) return <Navigate to="/login" replace state={{ from: location.pathname }} />
-  // Still need profile for user metadata — redirect to register if missing
-  if (!profile) return <Navigate to="/register" replace state={{ from: location.pathname }} />
+  // Allow either a Firebase user (when configured) or a local profile (mock/dev fallback)
+  const authed = Boolean(firebaseUser || profile)
+  if (!authed) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   return <Outlet />
 }
 
