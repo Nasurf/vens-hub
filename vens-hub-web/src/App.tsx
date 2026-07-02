@@ -99,9 +99,9 @@ type Profile = {
   firstName: string
   lastName: string
   email: string
-  level: string
   departmentCode: string
   departmentName: string
+  selectedCourses: Array<{ code: string; title: string }>
 }
 
 type EventItem = {
@@ -176,7 +176,7 @@ const departments: Department[] = [
   { name: 'PETROLEUM ENGINEERING', code: 'PET', course_count: 72 },
 ]
 
-const levelOptions = ['100', '200', '300', '400', '500']
+
 
 const featureHighlights = [
   'Interactive quizzes: multiple choice, theory and gap-fill ready',
@@ -817,6 +817,12 @@ function LoginPage() {
           <span>or</span>
         </div>
         <button className="google-button full" type="button" onClick={handleGoogleSignIn} disabled={loading}>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
           Sign in with Google
         </button>
         <p className="auth-switch">
@@ -832,28 +838,58 @@ function RegisterPage() {
   const [step, setStep] = useState(0)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [level, setLevel] = useState('')
   const [departmentCode, setDepartmentCode] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [courseList, setCourseList] = useState<Course[]>([])
+  const [courseLoading, setCourseLoading] = useState(false)
+  const [courseError, setCourseError] = useState('')
+  const [selectedCourses, setSelectedCourses] = useState<Array<{ code: string; title: string }>>([])
 
   const selectedDepartment = departments.find((department) => department.code === departmentCode)
   const canContinue =
     (step === 0 && firstName.trim() && lastName.trim()) ||
-    (step === 1 && level) ||
-    (step === 2 && departmentCode) ||
-    (step === 3 && email.includes('@') && password.length >= 6 && password === confirmPassword)
+    (step === 1 && departmentCode) ||
+    (step === 2 && selectedCourses.length > 0 && email.includes('@') && password.length >= 6 && password === confirmPassword)
+
+  async function fetchDepartmentCourses(code: string) {
+    setCourseLoading(true)
+    setCourseError('')
+    try {
+      const data = await api.departmentCourses(code)
+      setCourseList(data.courses ?? [])
+    } catch {
+      setCourseError('Failed to load courses. Try again.')
+    } finally {
+      setCourseLoading(false)
+    }
+  }
+
+  function handleDepartmentSelect(code: string) {
+    setDepartmentCode(code)
+    setSelectedCourses([])
+    fetchDepartmentCourses(code)
+  }
+
+  function toggleCourse(course: Course) {
+    setSelectedCourses((prev) => {
+      const exists = prev.find((c) => c.code === course.code)
+      if (exists) return prev.filter((c) => c.code !== course.code)
+      if (prev.length >= 10) return prev
+      return [...prev, { code: course.code, title: course.title }]
+    })
+  }
 
   async function next() {
     if (!canContinue) return
-    if (step < 3) {
+    if (step < 2) {
       setStep((value) => value + 1)
       return
     }
-    // Step 3 — create Firebase account
+    // Step 2 — create Firebase account
     setError('')
     setLoading(true)
     try {
@@ -863,9 +899,9 @@ function RegisterPage() {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
-        level,
         departmentCode: selectedDepartment.code,
         departmentName: selectedDepartment.name,
+        selectedCourses,
       })
       navigate('/app')
     } catch (err: any) {
@@ -894,9 +930,9 @@ function RegisterPage() {
         firstName: user.displayName?.split(' ')[0] || firstName.trim() || 'User',
         lastName: user.displayName?.split(' ').slice(1).join(' ') || lastName.trim() || '',
         email: user.email || email.trim(),
-        level,
         departmentCode: selectedDepartment.code,
         departmentName: selectedDepartment.name,
+        selectedCourses,
       })
       navigate('/app')
     } catch (err: any) {
@@ -915,7 +951,7 @@ function RegisterPage() {
           <Logo />
           <h1>Create Account</h1>
           <p>Follow the steps to set up your web workspace.</p>
-          {['Your Name', 'Your Level', 'Your Department', 'Your Credentials'].map((title, index) => (
+          {['Your Name', 'Your Department', 'Courses & Account'].map((title, index) => (
             <div className={cx('step-row', step === index && 'active', step > index && 'done')} key={title}>
               <span>{step > index ? <CheckCircle2 size={16} /> : index + 1}</span>
               <strong>{title}</strong>
@@ -941,24 +977,13 @@ function RegisterPage() {
             </StepPanel>
           )}
           {step === 1 && (
-            <StepPanel icon={<GraduationCap />} title="What level are you in?">
-              <div className="selection-grid">
-                {levelOptions.map((item) => (
-                  <button className={cx(level === item && 'selected')} key={item} onClick={() => setLevel(item)}>
-                    <GraduationCap size={18} /> {item} Level
-                  </button>
-                ))}
-              </div>
-            </StepPanel>
-          )}
-          {step === 2 && (
             <StepPanel icon={<Building2 />} title="Which department are you in?">
               <div className="selection-grid departments">
                 {departments.map((department) => (
                   <button
                     className={cx(departmentCode === department.code && 'selected')}
                     key={department.code}
-                    onClick={() => setDepartmentCode(department.code)}
+                    onClick={() => handleDepartmentSelect(department.code)}
                   >
                     <Building2 size={18} /> {department.name}
                   </button>
@@ -966,8 +991,59 @@ function RegisterPage() {
               </div>
             </StepPanel>
           )}
-          {step === 3 && (
-            <StepPanel icon={<Lock />} title="Last step, set up your login.">
+          {step === 2 && (
+            <StepPanel icon={<BookOpen />} title="Pick your courses (up to 10)">
+              <p className="step-hint">These will appear on your dashboard. You can change them later.</p>
+              {courseLoading ? (
+                <div className="course-select-loading">
+                  <span className="loader" />
+                  <p>Loading courses...</p>
+                </div>
+              ) : courseError ? (
+                <div className="course-select-loading">
+                  <p className="form-error">{courseError}</p>
+                  <button className="ghost-button" onClick={() => fetchDepartmentCourses(departmentCode)}>
+                    Retry
+                  </button>
+                </div>
+              ) : courseList.length === 0 ? (
+                <EmptyState icon={<BookOpen />} title="No courses found" body="No courses available for this department yet." />
+              ) : (
+                <>
+                  <div className="course-select-grid">
+                    {courseList.map((course) => {
+                      const isSelected = selectedCourses.some((c) => c.code === course.code)
+                      return (
+                        <button
+                          className={cx('course-select-card', isSelected && 'selected')}
+                          key={course.code}
+                          onClick={() => toggleCourse(course)}
+                          type="button"
+                        >
+                          <div className="course-select-topline">
+                            <span className="course-select-code">{course.code}</span>
+                            {isSelected && <span className="course-select-check">✓</span>}
+                          </div>
+                          <h4>{course.title}</h4>
+                          <div className="course-select-meta">
+                            {course.units ? <span>{course.units} units</span> : null}
+                            {courseLevels(course).slice(0, 1).map((lvl, i) => (
+                              <span key={i}>{lvl} level</span>
+                            ))}
+                            <span>{course.question_count ?? 0} questions</span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="course-select-count">
+                    {selectedCourses.length} selected{selectedCourses.length >= 10 ? ' (max reached)' : ` of 10 max`}
+                  </p>
+                </>
+              )}
+              <div className="credentials-divider">
+                <span>Account details</span>
+              </div>
               <label>
                 Email address
                 <input value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />
@@ -981,6 +1057,15 @@ function RegisterPage() {
                 <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" disabled={loading} />
               </label>
               {error && <p className="form-error">{error}</p>}
+              <button className="google-button full" type="button" onClick={handleGoogleSignUp} disabled={loading}>
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign up with Google
+              </button>
             </StepPanel>
           )}
           <div className="signup-actions">
@@ -988,17 +1073,9 @@ function RegisterPage() {
               Back
             </button>
             <button className="primary-button" disabled={!canContinue || loading} onClick={next}>
-              {loading ? 'Creating account...' : step === 3 ? 'Create Account' : 'Continue'}
+              {loading ? 'Creating account...' : step === 2 ? 'Create Account' : 'Continue'}
             </button>
           </div>
-          {step === 3 && (
-            <div className="auth-divider"><span>or</span></div>
-          )}
-          {step === 3 && (
-            <button className="google-button full" type="button" onClick={handleGoogleSignUp} disabled={loading}>
-              Sign up with Google
-            </button>
-          )}
         </div>
       </section>
     </PublicShell>
@@ -1046,9 +1123,9 @@ function demoProfile(email: string): Profile {
     firstName: 'Samuel',
     lastName: 'Engineer',
     email,
-    level: '400',
     departmentCode: 'ELE',
     departmentName: 'ELECTRICAL AND ELECTRONICS ENGINEERING',
+    selectedCourses: [],
   }
 }
 
@@ -1230,35 +1307,25 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
 
 function DashboardPage() {
   const profile = useProfile()
-  const courseState = useAsync(`department:${profile?.departmentCode ?? 'ELE'}`, () =>
-    api.departmentCourses(profile?.departmentCode ?? 'ELE'),
-  )
   const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
   const events = readJson<EventItem[]>(EVENTS_KEY, [])
+  const selectedCourses = profile?.selectedCourses ?? []
 
-  const levelCourses = useMemo(() => {
-    const courses = courseState.data?.courses ?? []
-    if (!profile?.level) return courses
-    return courses.filter((course) => courseLevels(course).includes(profile.level))
-  }, [courseState.data?.courses, profile?.level])
-
-  if (courseState.loading) return <LoadingState />
-  if (courseState.error) return <ErrorState message={courseState.error} />
+  if (!profile) return <LoadingState />
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Dashboard" title={`Welcome, ${profile?.firstName ?? 'Engineer'}`}>
+      <PageHeader eyebrow="Dashboard" title={`Welcome, ${profile.firstName ?? 'Engineer'}`}>
         <Link className="ghost-button" to="/app/courses">
           Browse courses
         </Link>
       </PageHeader>
       <section className="hero-dashboard">
         <div>
-          <p className="eyebrow">{profile?.departmentName}</p>
-          <h2>{profile?.level} Level learning workspace</h2>
+          <p className="eyebrow">{profile.departmentName}</p>
+          <h2>Your learning workspace</h2>
           <p>
-            The web app is now using the live Cloudflare Worker course API and a React route shell
-            that replaces the Flutter navigation stack.
+            Track your selected courses, take quizzes, and monitor your progress all in one place.
           </p>
           <Link to="/app/courses" className="primary-button">
             Start studying <ChevronRight size={18} />
@@ -1267,25 +1334,30 @@ function DashboardPage() {
         <img src="/brand/hub.svg" alt="Vens Hub mark" />
       </section>
       <section className="metrics-grid">
-        <MetricCard icon={<GraduationCap />} label="Department courses" value={courseState.data?.courses.length ?? 0} hint="From Worker API" />
-        <MetricCard icon={<BookOpen />} label="Your level" value={levelCourses.length} hint="Filtered by profile" />
+        <MetricCard icon={<GraduationCap />} label="My courses" value={selectedCourses.length} hint="Selected during setup" />
+        <MetricCard icon={<BookOpen />} label="Questions answered" value={attempts.reduce((sum, a) => sum + a.total, 0)} hint="Across all quizzes" />
         <MetricCard icon={<CalendarDays />} label="Saved events" value={events.length} hint="Local schedule" />
         <MetricCard icon={<Trophy />} label="Quiz attempts" value={attempts.length} hint="Tracked in Hub" />
       </section>
       <section className="section-card">
         <div className="section-title">
           <div>
-            <p className="eyebrow">Recommended</p>
-            <h2>Your courses</h2>
+            <p className="eyebrow">Your courses</p>
+            <h2>Course workspace</h2>
           </div>
           <Link to="/app/courses">View all</Link>
         </div>
-        {levelCourses.length === 0 ? (
-          <EmptyState icon={<BookOpen />} title="No level-specific courses yet" body="Open the full course catalog while the profile mapping is completed." />
+        {selectedCourses.length === 0 ? (
+          <EmptyState icon={<BookOpen />} title="No courses selected yet" body="Complete the registration flow to pick your courses, or browse the full catalog." />
         ) : (
           <div className="course-grid">
-            {levelCourses.slice(0, 6).map((course) => (
-              <CourseCard course={course} key={course.code} />
+            {selectedCourses.slice(0, 6).map((course) => (
+              <Link to={`/app/courses/${encodeURIComponent(course.code)}`} className="course-card" key={course.code}>
+                <div className="course-topline">
+                  <span>{course.code}</span>
+                </div>
+                <h3>{course.title}</h3>
+              </Link>
             ))}
           </div>
         )}
@@ -1332,7 +1404,7 @@ function CoursesPage() {
         </select>
         <select value={level} onChange={(event) => setLevel(event.target.value)}>
           <option value="">All levels</option>
-          {levelOptions.map((item) => (
+          {['100', '200', '300', '400', '500'].map((item) => (
             <option key={item} value={item}>
               {item} Level
             </option>
@@ -1940,21 +2012,37 @@ function ProfilePage() {
           Email
           <input value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
         </label>
-        <div className="two-col">
-          <label>
-            Level
-            <select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}>
-              {levelOptions.map((item) => <option key={item} value={item}>{item} Level</option>)}
-            </select>
-          </label>
-          <label>
-            Department
-            <select value={draft.departmentCode} onChange={(event) => setDraft({ ...draft, departmentCode: event.target.value })}>
-              {departments.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
-            </select>
-          </label>
+        <label>
+          Department
+          <select value={draft.departmentCode} onChange={(event) => setDraft({ ...draft, departmentCode: event.target.value })}>
+            {departments.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
+          </select>
+        </label>
+        <div className="section-card" style={{ marginTop: '1rem' }}>
+          <p className="eyebrow">My courses</p>
+          <h3 style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>{draft.selectedCourses.length} courses selected</h3>
+          {draft.selectedCourses.length === 0 ? (
+            <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>No courses selected. Go through registration to pick courses.</p>
+          ) : (
+            <div className="course-grid">
+              {draft.selectedCourses.map((course) => (
+                <div className="course-card" key={course.code} style={{ cursor: 'default' }}>
+                  <div className="course-topline"><span>{course.code}</span></div>
+                  <h3>{course.title}</h3>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--danger, #dc3545)' }}
+                    onClick={() => setDraft({ ...draft, selectedCourses: draft.selectedCourses.filter((c) => c.code !== course.code) })}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <button className="primary-button full" type="submit">Save profile</button>
+        <button className="primary-button full" type="submit" style={{ marginTop: '1rem' }}>Save profile</button>
       </form>
     </div>
   )
