@@ -692,6 +692,51 @@ export default {
         return json({ seeded, message: `Seeded ${seeded} KC states for user ${userId}` });
       }
 
+      // ── User Profile ───────────────────────────────────────────
+      if (path === '/user/profile' && request.method === 'POST') {
+        const body = await request.json();
+        const userId = getUserId(request, body);
+        if (!userId) return error('X-User-Id header or userId in body required', 401);
+
+        const { firstName, lastName, email, departmentCode, departmentName, selectedCourses } = body;
+        if (!firstName || !email || !departmentCode) {
+          return error('firstName, email, and departmentCode are required', 400);
+        }
+
+        const now = new Date().toISOString();
+        const coursesJson = JSON.stringify(selectedCourses || []);
+
+        await db.prepare(`
+          INSERT INTO user_profiles (user_id, first_name, last_name, email, department_code, department_name, selected_courses, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            first_name = excluded.first_name,
+            last_name = excluded.last_name,
+            email = excluded.email,
+            department_code = excluded.department_code,
+            department_name = excluded.department_name,
+            selected_courses = excluded.selected_courses,
+            updated_at = excluded.updated_at
+        `).bind(userId, firstName, lastName, email, departmentCode, departmentName, coursesJson, now, now).run();
+
+        return json({ ok: true, userId });
+      }
+
+      if (path === '/user/profile' && request.method === 'GET') {
+        const userId = request.headers.get('X-User-Id');
+        if (!userId) return error('X-User-Id header required', 401);
+
+        const row = await db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').bind(userId).first();
+        if (!row) return json({ profile: null });
+
+        return json({
+          profile: {
+            ...row,
+            selected_courses: JSON.parse(row.selected_courses || '[]'),
+          }
+        });
+      }
+
       // ── Existing: Health ─────────────────────────────────────────
       if (request.method !== 'GET') {
         return error('Method not allowed', 405);
@@ -703,10 +748,50 @@ export default {
 
       // ── Existing: Courses ────────────────────────────────────────
       if (path === '/courses') {
+        const url = new URL(request.url);
+        const q = url.searchParams.get('q') || '';
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
+        const cursor = parseInt(url.searchParams.get('cursor') || '0');
+        const dept = url.searchParams.get('department') || '';
+        const lvl = url.searchParams.get('level') || '';
+
+        let whereClauses = [];
+        const params = [];
+
+        if (dept) {
+          whereClauses.push('department_code = ?');
+          params.push(dept.toUpperCase());
+        }
+        if (q) {
+          whereClauses.push('(code LIKE ? OR title LIKE ?)');
+          const like = `%${q}%`;
+          params.push(like, like);
+        }
+        if (lvl) {
+          whereClauses.push('levels LIKE ?');
+          params.push(`%${lvl}%`);
+        }
+
+        const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+        const countRow = await db.prepare(
+          `SELECT COUNT(*) as total FROM courses ${whereClause}`
+        ).bind(...params).first();
+
         const { results } = await db.prepare(
-          'SELECT code, title, type, units, levels, semesters, description, department, department_code, question_count FROM courses ORDER BY code'
-        ).all();
-        return json({ courses: results });
+          `SELECT code, title, type, units, levels, semesters, description, department, department_code, question_count 
+           FROM courses ${whereClause} 
+           ORDER BY code 
+           LIMIT ? OFFSET ?`
+        ).bind(...params, limit, cursor).all();
+
+        const total = countRow?.total ?? 0;
+        return json({
+          courses: results,
+          total,
+          hasMore: cursor + limit < total,
+          nextCursor: cursor + limit,
+        });
       }
 
       if (segments[0] === 'courses' && segments.length === 2) {
@@ -736,10 +821,35 @@ export default {
 
       if (segments[0] === 'departments' && segments.length === 3 && segments[2] === 'courses') {
         const deptCode = segments[1].toUpperCase();
+        const url = new URL(request.url);
+        const q = url.searchParams.get('q') || '';
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
+        const cursor = parseInt(url.searchParams.get('cursor') || '0');
+
+        let whereClause = 'WHERE department_code = ?';
+        const params = [deptCode];
+
+        if (q) {
+          whereClause += ' AND (code LIKE ? OR title LIKE ?)';
+          const like = `%${q}%`;
+          params.push(like, like);
+        }
+
+        const countRow = await db.prepare(
+          `SELECT COUNT(*) as total FROM courses ${whereClause}`
+        ).bind(...params).first();
+
         const { results } = await db.prepare(
-          'SELECT code, title, type, units, levels, description, question_count FROM courses WHERE department_code = ? ORDER BY code'
-        ).bind(deptCode).all();
-        return json({ courses: results });
+          `SELECT code, title, type, units, levels, semesters, description, question_count FROM courses ${whereClause} ORDER BY code LIMIT ? OFFSET ?`
+        ).bind(...params, limit, cursor).all();
+
+        const total = countRow?.total ?? 0;
+        return json({
+          courses: results,
+          total,
+          hasMore: cursor + limit < total,
+          nextCursor: cursor + limit,
+        });
       }
 
       // ── Existing: Questions ──────────────────────────────────────
