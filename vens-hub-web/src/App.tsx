@@ -71,6 +71,9 @@ import {
   submitBatchResults,
   getUserStats,
   getUserMastery,
+  getCourseMastery,
+  getUserAttempts,
+  type AdaptiveAttempt,
   type CourseStats,
   type MasteryRecord,
 } from './adaptive'
@@ -2699,7 +2702,7 @@ function HubPage() {
                   .map(([code, data]) => {
                     const pct = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0
                     return (
-                      <div className="mastery-table-row" key={code}>
+                      <Link className="mastery-table-row analytics-link-row" key={code} to={`/app/hub/${encodeURIComponent(code)}`}>
                         <div className="mastery-course">
                           <strong>{code}</strong>
                           <span>{courseTitleMap[code] || code}</span>
@@ -2713,7 +2716,7 @@ function HubPage() {
                         <span>{data.attempts}</span>
                         <span>{data.correct}/{data.total}</span>
                         <span>{data.lastAttempt ? new Date(data.lastAttempt).toLocaleDateString() : '—'}</span>
-                      </div>
+                      </Link>
                     )
                   })}
               </div>
@@ -2906,6 +2909,140 @@ function HubPage() {
               body="Complete a course quiz and your progress will appear here."
             />
           )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function CourseAnalyticsPage() {
+  const { code = '' } = useParams()
+  const courseCode = decodeURIComponent(code)
+  const navigate = useNavigate()
+  const firebaseUser = useFirebaseUser()
+  const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
+  const [mastery, setMastery] = useState<MasteryRecord[]>([])
+  const [attempts, setAttempts] = useState<AdaptiveAttempt[]>([])
+  const [loading, setLoading] = useState(Boolean(userId))
+  const [error, setError] = useState('')
+
+  const localAttempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, []).filter((attempt) => attempt.courseCode === courseCode)
+  const title = localAttempts[0]?.courseTitle || courseCode
+
+  useEffect(() => {
+    if (!userId || !courseCode) {
+      setLoading(false)
+      return
+    }
+    let active = true
+    setLoading(true)
+    setError('')
+    Promise.all([
+      getCourseMastery(userId, courseCode),
+      getUserAttempts(userId, courseCode, 200),
+    ]).then(([courseMastery, attemptHistory]) => {
+      if (!active) return
+      setMastery(courseMastery.topics ?? [])
+      setAttempts(attemptHistory.attempts ?? [])
+      setLoading(false)
+    }).catch(() => {
+      if (!active) return
+      setError('Failed to load course analytics')
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [courseCode, userId])
+
+  const orderedAttempts = [...attempts].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  const totalQuestions = attempts.length || localAttempts.reduce((sum, attempt) => sum + attempt.total, 0)
+  const correctQuestions = attempts.length
+    ? attempts.filter((attempt) => Boolean(attempt.is_correct)).length
+    : localAttempts.reduce((sum, attempt) => sum + attempt.score, 0)
+  const accuracy = totalQuestions ? Math.round((correctQuestions / totalQuestions) * 100) : 0
+  const avgMastery = mastery.length ? Math.round((mastery.reduce((sum, topic) => sum + topic.mastery_prob, 0) / mastery.length) * 100) : 0
+  const masteredTopics = mastery.filter((topic) => topic.status === 'reviewing').length
+  const strongestTopics = [...mastery].sort((a, b) => b.mastery_prob - a.mastery_prob).slice(0, 6)
+  const weakestTopics = [...mastery].sort((a, b) => a.mastery_prob - b.mastery_prob).slice(0, 6)
+  const progressPoints = orderedAttempts.map((attempt, index) => ({
+    label: new Date(attempt.created_at).toLocaleDateString(),
+    value: Math.round(attempt.mastery_after * 100),
+    before: Math.round(attempt.mastery_before * 100),
+    index: index + 1,
+  }))
+  const polyline = progressPoints.map((point, index) => {
+    const x = progressPoints.length === 1 ? 50 : (index / (progressPoints.length - 1)) * 100
+    const y = 100 - point.value
+    return `${x},${y}`
+  }).join(' ')
+  const topicBars = (strongestTopics.length ? strongestTopics : weakestTopics).slice(0, 8)
+
+  return (
+    <div className="page-stack">
+      <button className="ghost-button inline-back" onClick={() => navigate('/app/hub')}><ArrowLeft size={16} /> Back to Hub</button>
+      <PageHeader eyebrow="Course analytics" title={title}>Detailed adaptive learning progress, mastery movement, strengths, and topics that need attention.</PageHeader>
+      {loading && <LoadingState label="Loading course analytics..." />}
+      {error && !loading && <ErrorState message={error} />}
+      {!loading && !error && (
+        <>
+          <section className="metrics-grid">
+            <MetricCard icon={<Target />} label="Accuracy" value={`${accuracy}%`} hint={`${correctQuestions}/${totalQuestions} correct`} />
+            <MetricCard icon={<BrainCircuit />} label="Adaptive mastery" value={`${avgMastery}%`} hint={`${masteredTopics}/${mastery.length} topics reviewing`} />
+            <MetricCard icon={<BarChart3 />} label="Answer events" value={attempts.length || totalQuestions} hint={attempts.length ? 'Synced adaptive attempts' : 'Local quiz questions'} />
+            <MetricCard icon={<CalendarDays />} label="Quiz sessions" value={localAttempts.length} hint="Completed on this device" />
+          </section>
+
+          <section className="section-card">
+            <div className="section-title">
+              <h2>Progress over time</h2>
+              <span className="score-chip">{progressPoints.length} answers</span>
+            </div>
+            {progressPoints.length > 0 ? (
+              <div className="progress-chart-card">
+                <svg className="progress-line-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Mastery progress line chart">
+                  <polyline className="progress-line-area" points={`0,100 ${polyline} 100,100`} />
+                  <polyline className="progress-line" points={polyline} />
+                </svg>
+                <div className="progress-chart-labels">
+                  <span>{progressPoints[0]?.label}</span>
+                  <span>{progressPoints.at(-1)?.label}</span>
+                </div>
+              </div>
+            ) : (
+              <EmptyState icon={<LineChart />} title="No adaptive answer history yet" body="Complete a signed-in multiple-choice quiz to see mastery change after each answer." />
+            )}
+          </section>
+
+          <section className="analytics-two-column">
+            <div className="section-card">
+              <div className="section-title"><h2>Strengths bar chart</h2></div>
+              <div className="topic-bar-chart">
+                {topicBars.map((topic) => {
+                  const pct = Math.round(topic.mastery_prob * 100)
+                  return (
+                    <div className="topic-bar-row" key={`${topic.course_code}-${topic.topic_name}`}>
+                      <span>{topic.topic_name}</span>
+                      <div className="topic-bar-track"><b style={{ width: `${pct}%` }} /></div>
+                      <strong>{pct}%</strong>
+                    </div>
+                  )
+                })}
+                {topicBars.length === 0 && <p className="section-hint">No topic mastery has been synced for this course yet.</p>}
+              </div>
+            </div>
+
+            <div className="section-card">
+              <div className="section-title"><h2>Needs attention</h2></div>
+              <div className="topic-mastery-list">
+                {weakestTopics.map((topic) => (
+                  <article className="topic-mastery-item fragile" key={`${topic.course_code}-${topic.topic_name}`}>
+                    <div className="topic-mastery-info"><strong>{topic.topic_name}</strong><span>{topic.correct_attempts}/{topic.total_attempts} correct</span></div>
+                    <div className="topic-mastery-bar"><span className={cx('mastery-bar-fill', topic.mastery_prob >= 0.75 ? 'mastery-high' : topic.mastery_prob >= 0.5 ? 'mastery-mid' : 'mastery-low')} style={{ width: `${Math.round(topic.mastery_prob * 100)}%` }} /></div>
+                  </article>
+                ))}
+                {weakestTopics.length === 0 && <p className="section-hint">More adaptive attempts will identify weak topics and review priorities.</p>}
+              </div>
+            </div>
+          </section>
         </>
       )}
     </div>
@@ -3163,6 +3300,7 @@ function App() {
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="study" element={<StudyPage />} />
             <Route path="hub" element={<HubPage />} />
+            <Route path="hub/:code" element={<CourseAnalyticsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>
