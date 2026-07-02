@@ -2,15 +2,16 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:math' show min, max;
 import 'dart:typed_data';
-import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:vens_hub/core/error/exceptions.dart';
 import 'package:vens_hub/data/models/question_model.dart';
 import 'package:vens_hub/data/models/answer_feedback_model.dart';
 
-// Improved GeminiApi Class using firebase_ai
+// Gemini API client using the public Google Generative AI SDK.
 class GeminiApi {
   final String modelType;
+  late final String _apiKey;
   late final GenerativeModel _model;
   late final ChatSession _chat;
 
@@ -33,6 +34,7 @@ class GeminiApi {
               : "***";
       log("Initializing Gemini API with key: $maskedKey");
 
+      _apiKey = apiKey;
       _initializeModel();
     } catch (e) {
       log("Error initializing GeminiApi: $e");
@@ -42,11 +44,9 @@ class GeminiApi {
 
   void _initializeModel() {
     try {
-      // Initialize Firebase AI with Google AI backend
-      final ai = FirebaseAI.googleAI();
-
-      _model = ai.generativeModel(
+      _model = GenerativeModel(
         model: modelType,
+        apiKey: _apiKey,
         generationConfig: GenerationConfig(
           temperature: 0.3,
           topK: 40,
@@ -331,9 +331,9 @@ class GeminiApi {
       log("User answer length: ${userAnswer.length} characters");
 
       // Create a new model instance specifically for evaluation
-      final ai = FirebaseAI.googleAI();
-      final evaluationModel = ai.generativeModel(
+      final evaluationModel = GenerativeModel(
         model: modelType,
+        apiKey: _apiKey,
         generationConfig: GenerationConfig(
           temperature: 0.3, // Lower temperature for more consistent evaluation
           topK: 40,
@@ -480,9 +480,9 @@ Ensure your response is only the JSON object, with no preceding or succeeding te
       log("User answer length: ${userAnswer.length} characters");
 
       // Create a new model instance specifically for evaluation with images
-      final ai = FirebaseAI.googleAI();
-      final evaluationModel = ai.generativeModel(
+      final evaluationModel = GenerativeModel(
         model: modelType,
+        apiKey: _apiKey,
         generationConfig: GenerationConfig(
           temperature: 0.3, // Lower temperature for more consistent evaluation
           topK: 40,
@@ -506,11 +506,11 @@ Ensure your response is only the JSON object, with no preceding or succeeding te
       for (final image in images) {
         try {
           if (image is Uint8List) {
-            contentParts.add(InlineDataPart('image/jpeg', image));
+            contentParts.add(DataPart('image/jpeg', image));
           } else {
             final dynamic dyn = image;
             final bytes = await dyn.readAsBytes();
-            contentParts.add(InlineDataPart('image/jpeg', bytes as Uint8List));
+            contentParts.add(DataPart('image/jpeg', bytes as Uint8List));
           }
         } catch (e) {
           // Skip invalid image input
@@ -586,9 +586,9 @@ Ensure your response is only the JSON object, with no preceding or succeeding te
       log("User answer length: ${userAnswer.length} characters");
 
       // Create a new model instance specifically for evaluation with images
-      final ai = FirebaseAI.googleAI();
-      final evaluationModel = ai.generativeModel(
+      final evaluationModel = GenerativeModel(
         model: modelType,
+        apiKey: _apiKey,
         generationConfig: GenerationConfig(
           temperature: 0.3, // Lower temperature for more consistent evaluation
           topK: 40,
@@ -610,7 +610,7 @@ Ensure your response is only the JSON object, with no preceding or succeeding te
 
       // Add images as data parts
       for (final bytes in imageBytes) {
-        contentParts.add(InlineDataPart('image/jpeg', bytes));
+        contentParts.add(DataPart('image/jpeg', bytes));
       }
 
       final content = Content.multi(contentParts);
