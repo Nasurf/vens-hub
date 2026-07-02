@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
 
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:vens_hub/data/auth/repositories/auth_repository_impl.dart';
@@ -266,27 +265,6 @@ Future<void> _initializeDeferredServices(
     }
   } else {
     diag.skip('PerformanceService.initialize', reason: 'web');
-  }
-
-  if (!kDebugMode) {
-    diag.start('AppCheck.activate');
-    try {
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: AndroidProvider.playIntegrity,
-        appleProvider: AppleProvider.deviceCheck,
-        webProvider: ReCaptchaV3Provider(
-          '6LfbAGIrAAAAAKKYt2ScGHdAlKhEQO-lAHsiABhB',
-        ),
-      );
-      await FirebaseAppCheck.instance.setTokenAutoRefreshEnabled(true);
-      diag.success('AppCheck.activate');
-    } catch (e) {
-      log('Firebase AppCheck initialization error: $e');
-      diag.fail('AppCheck.activate', e);
-    }
-  } else {
-    log('App Check disabled in debug mode to avoid rate limiting');
-    diag.skip('AppCheck.activate', reason: 'debug mode');
   }
 
   diag.start('NotificationService.initialize');
