@@ -167,7 +167,7 @@ type QuizAttempt = {
   id: string
   courseCode: string
   courseTitle: string
-  mode?: 'multiple-choice'
+  mode?: 'multiple-choice' | 'theory' | 'gap-fill'
   score: number
   total: number
   createdAt: string
