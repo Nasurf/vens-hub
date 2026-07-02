@@ -12,13 +12,13 @@ import {
 } from 'firebase/auth'
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: 'AIzaSyA9b4G4B-IXUH9zwfLh_cI3G3kx7c8H10I',
+  authDomain: 'vens-hub.firebaseapp.com',
+  projectId: 'vens-hub',
+  storageBucket: 'vens-hub.firebasestorage.app',
+  messagingSenderId: '617771520988',
+  appId: '1:617771520988:web:bf365c8a1c2608aacfb519',
+  measurementId: 'G-KGFF3NWEXQ',
 }
 
 const looksLikeRealKey = Boolean(

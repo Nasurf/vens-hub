@@ -1078,7 +1078,7 @@ function RegisterPage() {
                   className="course-search-input"
                   value={courseSearch}
                   onChange={(event) => setCourseSearch(event.target.value)}
-                  placeholder="Search courses by code or name..."
+                  placeholder="Search courses by name..."
                 />
               </div>
               {courseLoading && courseList.length === 0 ? (
