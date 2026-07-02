@@ -1,0 +1,17 @@
+name: adaptive_engine
+description: "Adaptive Engine client package for Vens Hub"
+version: 1.0.0
+publish_to: "none"
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+  vens_hub:
+    path: ../../
+
+dev_dependencies:
+  test: ^1.24.0
