@@ -72,6 +72,7 @@ macos/Runner/GoogleService-Info.plist
 assets/.env
 
 # Local secrets
+.wrangler/
 android/local.properties
 *.jks
 *.keystore
