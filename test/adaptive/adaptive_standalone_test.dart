@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 // ── Inline copies of the types (avoids flutter dependency) ──
 class SubmitAnswerInput {
@@ -108,14 +108,12 @@ void main() {
       final fixturePath = '${Directory.current.path}/functions-adaptive/fixtures/bkt-test-cases.json';
       final file = File(fixturePath);
       if (!file.existsSync()) {
-        print('Skipping: fixture file not found at $fixturePath');
         return;
       }
       final contents = file.readAsStringSync();
       final j = jsonDecode(contents);
       final cases = (j['testCases'] as List).length;
       expect(cases, greaterThanOrEqualTo(10));
-      print('Loaded $cases test cases from shared fixture file');
     });
   });
 }

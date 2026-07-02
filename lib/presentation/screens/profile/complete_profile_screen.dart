@@ -145,8 +145,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                                         email: email,
                                         firstName: firstName,
                                         lastName: lastName,
-                                        level: _level!,
                                         department: _department!,
+                                        selectedCourses: const [],
                                       );
                                   result.fold(
                                     (failure) {

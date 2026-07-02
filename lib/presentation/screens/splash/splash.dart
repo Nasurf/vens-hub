@@ -19,11 +19,7 @@ class SplashScreen extends StatelessWidget {
         if (state is Authenticated) {
           Get.offAllNamed(
             AppRoutes.main,
-          ); // Navigate to home for authenticated and verified users
-        } else if (state is AuthAwaitingVerification) {
-          Get.offAllNamed(
-            AppRoutes.emailVerification,
-          ); // Navigate to email verification for unverified users
+          ); // Navigate to home for authenticated users
         } else if (state is Unauthenticated || state is AuthFailureState) {
           Get.offAllNamed(
             AppRoutes.onBoarding,

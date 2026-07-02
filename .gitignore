@@ -84,7 +84,7 @@ service-account*.json
 *-service-account*.json
 *-credentials*.json
 lib/firebase_options.dart
-
 # Question bank data (large, not source code)
 BANK/
 BANK/.upload_checkpoint.json
+lib/core/config/environment_config.dart

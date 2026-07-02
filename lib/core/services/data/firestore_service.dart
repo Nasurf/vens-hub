@@ -2,7 +2,6 @@ import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:get/get.dart';
 import 'package:vens_hub/core/di/injection_container.dart';
 import 'package:vens_hub/core/error/exceptions.dart';
@@ -16,17 +15,6 @@ class FireStoreServices extends GetxController {
   final _db = FirebaseFirestore.instance;
   FirebasePerformance? get _performance =>
       sl.isRegistered<FirebasePerformance>() ? sl<FirebasePerformance>() : null;
-
-  /// Refresh App Check token if needed
-  Future<void> _refreshAppCheckTokenIfNeeded() async {
-    try {
-      await FirebaseAppCheck.instance.getToken(true);
-      log("App Check token refreshed successfully");
-    } catch (e) {
-      log("Failed to refresh App Check token: $e");
-      // Continue without token - App Check will retry automatically
-    }
-  }
 
   final String courseCollectionName = "course_data";
 
@@ -51,8 +39,6 @@ class FireStoreServices extends GetxController {
             : _performance?.newTrace('firestore_submitQuestionReport');
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
-
       final Map<String, dynamic> data = {
         'uid': uid,
         'questionType': questionType,
@@ -101,7 +87,6 @@ class FireStoreServices extends GetxController {
     trace?.putAttribute('level', level);
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final docId = '${departmentCode}_$level';
       Query<Map<String, dynamic>> baseQuery = _db
           .collection('timetables')
@@ -240,7 +225,6 @@ class FireStoreServices extends GetxController {
     trace?.putAttribute('uid', uid);
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final snapshot =
           await _db.collection('users').doc(uid).collection('events').get();
       return snapshot.docs.map((d) => ({...d.data(), 'id': d.id})).toList();
@@ -569,7 +553,6 @@ class FireStoreServices extends GetxController {
     await trace?.start();
     try {
       // Refresh App Check token before making the request
-      await _refreshAppCheckTokenIfNeeded();
 
       log("Fetching course info for department: $department, level: $level");
       QuerySnapshot<Map<String, dynamic>> doc =
@@ -922,7 +905,6 @@ class FireStoreServices extends GetxController {
     trace?.putAttribute('uid', uid);
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final String dayId = _formatDayId(startedAt);
       final DocumentReference<Map<String, dynamic>> dayDocRef = _db
           .collection('users')
@@ -975,7 +957,6 @@ class FireStoreServices extends GetxController {
     trace?.putAttribute('limit', limit.toString());
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final attempts = <Map<String, dynamic>>[];
 
       final dayCol = _db
@@ -1114,8 +1095,6 @@ class FireStoreServices extends GetxController {
             : _performance?.newTrace('firestore_getDailyCountsForWeek');
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
-
       // Determine week bounds within the month
       final year = anyDayInWeek.year;
       final month = anyDayInWeek.month;
@@ -1168,7 +1147,6 @@ class FireStoreServices extends GetxController {
             : _performance?.newTrace('firestore_getWeeklyCountsForMonth');
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final daysInMonth = DateTime(year, month + 1, 0).day;
       final List<int> counts = List<int>.filled(4, 0);
 
@@ -1207,7 +1185,6 @@ class FireStoreServices extends GetxController {
             : _performance?.newTrace('firestore_getHourlyQuizAttempts');
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final String dayId = _formatDayId(day);
       final DocumentReference<Map<String, dynamic>> dayDocRef = _db
           .collection('users')
@@ -1410,7 +1387,6 @@ class FireStoreServices extends GetxController {
     trace?.putAttribute('session', sessionId);
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final colRef = _db
           .collection('academic_calendar_sessions')
           .doc(sessionId)
@@ -1474,7 +1450,6 @@ class FireStoreServices extends GetxController {
     trace?.putAttribute('uid', uid);
     await trace?.start();
     try {
-      await _refreshAppCheckTokenIfNeeded();
       final String dayId = _formatDayId(DateTime.now());
       final DocumentReference<Map<String, dynamic>> dayDocRef = _db
           .collection('users')

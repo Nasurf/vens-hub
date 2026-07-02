@@ -7,12 +7,9 @@ import 'package:vens_hub/domain/auth/usecases/sign_up_user_usecase.dart';
 import 'package:vens_hub/domain/auth/usecases/sign_out_user_usecase.dart';
 
 import 'package:vens_hub/domain/auth/usecases/complete_user_profile_data_storage_usecase.dart';
-import 'package:vens_hub/domain/auth/usecases/send_verification_email_usecase.dart';
-import 'package:vens_hub/domain/auth/usecases/check_email_verification_usecase.dart';
-// No DeleteAuthUserUseCase for now, to keep it simpler. Rollback on email send failure is a secondary improvement.
+import 'package:vens_hub/core/error/exceptions.dart';
 import 'package:vens_hub/core/di/injection_container.dart' as di;
 import 'package:vens_hub/core/services/analytics/analytics_service.dart';
-import 'package:vens_hub/core/error/exceptions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/services/auth/auth_service.dart';
 import 'auth_event.dart';
@@ -23,8 +20,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SignInUserUseCase signInUserUseCase;
   final SignUpUserUseCase signUpUserUseCase;
   final SignOutUserUseCase signOutUserUseCase;
-  final SendVerificationEmailUseCase sendVerificationEmailUseCase;
-  final CheckEmailVerificationUseCase checkEmailVerificationUseCase;
 
   final CompleteUserProfileDataStorageUseCase
   completeUserProfileDataStorageUseCase;
@@ -37,16 +32,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.signUpUserUseCase,
     required this.signOutUserUseCase,
     required this.completeUserProfileDataStorageUseCase,
-    required this.sendVerificationEmailUseCase,
-    required this.checkEmailVerificationUseCase,
   }) : super(AuthInitial()) {
     on<AuthAppStarted>(_onAppStarted);
     on<AuthSignInRequested>(_onSignInRequested);
     on<AuthGoogleSignInRequested>(_onGoogleSignInRequested);
     on<AuthSignUpRequested>(_onSignUpRequested);
     on<AuthSignOut>(_signOutRequested);
-    on<AuthSendVerificationEmailRequested>(_onSendVerificationEmailRequested);
-    on<AuthCheckEmailVerification>(_onCheckEmailVerification);
   }
 
   Future<void> _signOutRequested(
@@ -92,155 +83,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           unit: 'ms',
         );
         emit(Unauthenticated());
-      },
-    );
-  }
-
-  Future<void> _onSendVerificationEmailRequested(
-    AuthSendVerificationEmailRequested event,
-    Emitter<AuthState> emit,
-  ) async {
-    final analyticsService = di.sl<AnalyticsService>();
-
-    await analyticsService.logAuthEvent(
-      authAction: 'verification_email_send_attempt',
-      method: 'email',
-    );
-
-    final failureOrSuccess = await sendVerificationEmailUseCase(NoParams());
-    failureOrSuccess.fold(
-      (failure) {
-        analyticsService.logAuthEvent(
-          authAction: 'verification_email_send',
-          method: 'email',
-          success: false,
-          errorCode: failure.message,
-        );
-        analyticsService.logError(
-          'Email verification send failed',
-          error: failure.message,
-          fatal: false,
-        );
-        emit(AuthFailureState(failure.message));
-      },
-      (_) {
-        analyticsService.logAuthEvent(
-          authAction: 'verification_email_send',
-          method: 'email',
-          success: true,
-        );
-      },
-    );
-  }
-
-  Future<void> _onCheckEmailVerification(
-    AuthCheckEmailVerification event,
-    Emitter<AuthState> emit,
-  ) async {
-    final analyticsService = di.sl<AnalyticsService>();
-    final authService = di.sl<AuthService>();
-
-    emit(AuthEmailVerificationLoading());
-
-    try {
-      await authService.reloadCurrentUser();
-    } on NetworkException catch (e) {
-      await analyticsService.logAuthEvent(
-        authAction: 'email_verification_check_attempt',
-        method: 'email',
-        success: false,
-        errorCode: 'network_unavailable',
-      );
-      emit(AuthFailureState(e.message));
-      return;
-    } on AuthenticationException catch (e) {
-      await analyticsService.logAuthEvent(
-        authAction: 'email_verification_check_attempt',
-        method: 'email',
-        success: false,
-        errorCode: 'reload_failed',
-      );
-      emit(AuthFailureState(e.message));
-      return;
-    } catch (e) {
-      await analyticsService.logError(
-        'Unexpected error refreshing user before verification check',
-        error: e.toString(),
-        fatal: false,
-      );
-      emit(AuthFailureState('Something went wrong. Please try again.'));
-      return;
-    }
-
-    await analyticsService.logAuthEvent(
-      authAction: 'email_verification_check_attempt',
-      method: 'email',
-    );
-
-    final failureOrVerified = await checkEmailVerificationUseCase(NoParams());
-    await failureOrVerified.fold(
-      (failure) async {
-        await analyticsService.logAuthEvent(
-          authAction: 'email_verification_check',
-          method: 'email',
-          success: false,
-          errorCode: failure.message,
-        );
-        emit(AuthFailureState(failure.message));
-      },
-      (isVerified) async {
-        await analyticsService.logAuthEvent(
-          authAction: 'email_verification_check',
-          method: 'email',
-          success: true,
-        );
-
-        if (isVerified) {
-          await analyticsService.logAuthEvent(
-            authAction: 'email_verified',
-            method: 'email',
-            success: true,
-          );
-
-          final currentUserResult = await getCurrentUserUseCase(NoParams());
-          await currentUserResult.fold(
-            (failure) async {
-              await analyticsService.logError(
-                'Failed to get user after email verification',
-                error: failure.message,
-                fatal: false,
-              );
-              emit(AuthFailureState(failure.message));
-            },
-            (user) async {
-              if (user != null) {
-                await analyticsService.logUserJourney(
-                  fromScreen: 'email_verification',
-                  toScreen: 'authenticated_home',
-                  action: 'email_verification_success',
-                  context: {
-                    'user_id': user.id ?? 'unknown',
-                    'department': user.department,
-                    'level': user.level,
-                  },
-                );
-                emit(Authenticated(user));
-              } else {
-                emit(Unauthenticated());
-              }
-            },
-          );
-        } else {
-          await analyticsService.logAuthEvent(
-            authAction: 'email_verification_pending',
-            method: 'email',
-            success: false,
-            errorCode: 'email_not_verified',
-          );
-          emit(
-            AuthFailureState('Email not verified. Please check your inbox.'),
-          );
-        }
       },
     );
   }
@@ -613,7 +455,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await analyticsService.logUserJourney(
           fromScreen: 'sign_up',
           toScreen: 'authenticated_home',
-          action: 'successful_sign_up_verified',
+          action: 'successful_sign_up',
           context: {
             'user_id': user.id ?? 'unknown',
             'department': user.department,

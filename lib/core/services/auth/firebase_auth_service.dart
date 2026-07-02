@@ -122,52 +122,6 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<void> sendEmailVerification() async {
-    final trace =
-        kIsWeb ? null : _performance?.newTrace('auth_sendEmailVerification');
-    await trace?.start();
-    try {
-      final user = _firebaseAuth.currentUser;
-      if (user == null) {
-        throw AuthenticationException(message: 'No user signed in.');
-      }
-      if (kIsWeb) {
-        // Redirect users back to the public /verify landing path on the site.
-        // Ensure this domain is in Firebase Auth Authorized Domains.
-        const continueUrl = 'https://engineeringhub.nuesaabuad.ng/verify';
-        final actionCodeSettings = fb_auth.ActionCodeSettings(
-          url: continueUrl,
-          // Let Firebase handle verification in the browser, then redirect.
-          handleCodeInApp: false,
-        );
-        await user.sendEmailVerification(actionCodeSettings);
-      } else {
-        await user.sendEmailVerification();
-      }
-    } on fb_auth.FirebaseAuthException catch (e) {
-      trace?.putAttribute('error', e.code);
-      throw _mapFirebaseAuthException(e);
-    } catch (e) {
-      trace?.putAttribute('error', e.runtimeType.toString());
-      throw AuthenticationException(
-        message: 'Failed to send verification email.',
-      );
-    } finally {
-      await trace?.stop();
-    }
-  }
-
-  @override
-  Future<bool> isEmailVerified() async {
-    await reloadCurrentUser();
-    final refreshedUser = _firebaseAuth.currentUser;
-    if (refreshedUser == null) {
-      throw AuthenticationException(message: 'No user signed in.');
-    }
-    return refreshedUser.emailVerified;
-  }
-
-  @override
   Future<void> forgotPassword() async {
     // This is a placeholder. You might want to pass email as parameter
     throw UnimplementedError('forgotPassword needs to be implemented');
