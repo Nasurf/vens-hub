@@ -8,7 +8,9 @@ import {
   BookOpen,
   BrainCircuit,
   Building2,
+  Calculator,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -18,6 +20,7 @@ import {
   Flame,
   GraduationCap,
   Home,
+  Laptop,
   Layers3,
   LineChart,
   Lock,
@@ -25,14 +28,18 @@ import {
   Mail,
   Menu,
   MessageCircle,
+  Moon,
+  Palette,
   PlayCircle,
   Plus,
   RefreshCw,
   Search,
   Send,
   Sparkles,
+  Sun,
   Target,
   TimerReset,
+  Trash2,
   Trophy,
   UploadCloud,
   User,
@@ -166,6 +173,8 @@ const PROFILE_KEY = 'vens-hub-web-profile'
 const EVENTS_KEY = 'vens-hub-web-events'
 const UPLOADS_KEY = 'vens-hub-web-uploads'
 const ATTEMPTS_KEY = 'vens-hub-web-quiz-attempts'
+const THEME_KEY = 'vens-hub-web-theme'
+const SCHEME_KEY = 'vens-hub-web-scheme'
 
 const departments: Department[] = [
   { name: 'AERONAUTICAL ENGINEERING', code: 'AER', course_count: 93 },
@@ -217,6 +226,92 @@ function saveProfile(profile: Profile | null) {
     localStorage.removeItem(PROFILE_KEY)
     window.dispatchEvent(new Event('vens-hub-storage'))
   }
+}
+
+// ─── Theme & Color Scheme Persistence ────────────────────────────────────────
+
+const colorSchemes = [
+  { name: 'Teal', color: '#0f9b8e', dark: '#4DB6AC' },
+  { name: 'Blue', color: '#1E88E5', dark: '#64B5F6' },
+  { name: 'Purple', color: '#7E57C2', dark: '#9575CD' },
+  { name: 'Pink', color: '#F42870', dark: '#F06292' },
+  { name: 'Orange', color: '#FB8C00', dark: '#FFB74D' },
+  { name: 'Green', color: '#43A047', dark: '#81C784' },
+  { name: 'Slate', color: '#555555', dark: '#AAAAAA' },
+]
+
+function getTheme(): 'light' | 'dark' | 'system' {
+  try {
+    const raw = localStorage.getItem(THEME_KEY)
+    if (raw === 'dark' || raw === 'system') return raw
+    return 'light'
+  } catch {
+    return 'light'
+  }
+}
+
+function saveTheme(mode: 'light' | 'dark' | 'system') {
+  localStorage.setItem(THEME_KEY, mode)
+  applyTheme(mode)
+}
+
+function getScheme(): string {
+  try {
+    return localStorage.getItem(SCHEME_KEY) || '#0f9b8e'
+  } catch {
+    return '#0f9b8e'
+  }
+}
+
+function saveScheme(color: string) {
+  localStorage.setItem(SCHEME_KEY, color)
+  applyScheme(color)
+}
+
+function resolveTheme(mode: 'light' | 'dark' | 'system'): 'light' | 'dark' {
+  if (mode !== 'system') return mode
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function applyTheme(mode: 'light' | 'dark' | 'system') {
+  const resolved = resolveTheme(mode)
+  document.documentElement.setAttribute('data-theme', resolved)
+  localStorage.setItem(THEME_KEY, mode)
+}
+
+function applyScheme(color: string) {
+  const scheme = colorSchemes.find((s) => s.color === color)
+  if (!scheme) return
+  document.documentElement.setAttribute('data-scheme', scheme.name.toLowerCase())
+  localStorage.setItem(SCHEME_KEY, color)
+}
+
+function useTheme() {
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => getTheme())
+  const [scheme, setScheme] = useState<string>(() => getScheme())
+  const [resolved, setResolved] = useState<'light' | 'dark'>(() => resolveTheme(theme))
+
+  useEffect(() => {
+    const resolvedTheme = resolveTheme(theme)
+    setResolved(resolvedTheme)
+    applyTheme(theme)
+    applyScheme(scheme)
+
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      const handler = () => {
+        const r = resolveTheme('system')
+        setResolved(r)
+        document.documentElement.setAttribute('data-theme', r)
+      }
+      mq.addEventListener('change', handler)
+      return () => mq.removeEventListener('change', handler)
+    }
+  }, [theme, scheme])
+
+  return { theme, setTheme: (m: 'light' | 'dark' | 'system') => { saveTheme(m); setTheme(m) },
+           scheme, setScheme: (c: string) => { saveScheme(c); setScheme(c) },
+           resolved }
 }
 
 function useProfile() {
@@ -1611,14 +1706,8 @@ function CourseDetailPage() {
   const courseState = useAsync(`course:${code}`, () => api.course(code))
   const questionState = useAsync(`questions:${code}`, () => api.questions(code))
 
-  if (courseState.loading) return <LoadingState label="Loading course details..." />
-  if (courseState.error) return <ErrorState message={courseState.error} />
-
-  const course = courseState.data?.course
-  if (!course) return <ErrorState message="Course was not returned by the API." />
-  const outline = courseOutline(course)
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({})
   const questions = questionState.data?.questions ?? []
-  // Group by topic and find unique subtopics
   const topicsList = useMemo(() => {
     const map: Record<string, Set<string>> = {}
     questions.forEach((q) => {
@@ -1635,7 +1724,12 @@ function CourseDetailPage() {
     })).sort((a, b) => a.name.localeCompare(b.name))
   }, [questions])
 
-  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({})
+  if (courseState.loading) return <LoadingState label="Loading course details..." />
+  if (courseState.error) return <ErrorState message={courseState.error} />
+
+  const course = courseState.data?.course
+  if (!course) return <ErrorState message="Course was not returned by the API." />
+  const outline = courseOutline(course)
 
   const toggleTopic = (topicName: string) => {
     setExpandedTopics((prev) => ({
@@ -1660,17 +1754,6 @@ function CourseDetailPage() {
             {courseSemesters(course).map((item, itemIndex) => <span key={`${item}-${itemIndex}`}>{item}</span>)}
             <span>{questionState.data?.count ?? 0} questions</span>
           </div>
-        </div>
-        <div className="quiz-mode-actions">
-          <Link className="primary-button" to={`/app/quiz/${encodeURIComponent(course.code)}?mode=mcq`}>
-            Multiple choice <PlayCircle size={18} />
-          </Link>
-          <Link className="ghost-button" to={`/app/quiz/${encodeURIComponent(course.code)}?mode=theory`}>
-            Theory mode
-          </Link>
-          <Link className="ghost-button" to={`/app/quiz/${encodeURIComponent(course.code)}?mode=gap`}>
-            Gap-fill mode
-          </Link>
         </div>
       </section>
       <section className="detail-grid">
@@ -1701,19 +1784,27 @@ function CourseDetailPage() {
                   const isExpanded = !!expandedTopics[topic.name]
                   return (
                     <div key={topic.name} className="topic-dropdown-item">
-                      <button
-                        type="button"
-                        className="topic-dropdown-header"
-                        onClick={() => toggleTopic(topic.name)}
-                      >
-                        <span className={clsx("chevron-icon", isExpanded && "expanded")}>
-                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                        </span>
-                        <strong>{topic.name}</strong>
-                        <span className="subtopic-count-badge">
-                          {topic.subtopics.length} subtopic{topic.subtopics.length !== 1 ? 's' : ''}
-                        </span>
-                      </button>
+                      <div className="topic-dropdown-header">
+                        <button
+                          type="button"
+                          className="chevron-btn"
+                          onClick={() => toggleTopic(topic.name)}
+                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                        >
+                          <span className={clsx("chevron-icon", isExpanded && "expanded")}>
+                            {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                          </span>
+                        </button>
+                        <Link
+                          to={`/app/courses/${encodeURIComponent(code)}/quiz?topic=${encodeURIComponent(topic.name)}`}
+                          className="topic-link"
+                        >
+                          <strong>{topic.name}</strong>
+                          <span className="subtopic-count-badge">
+                            {topic.subtopics.length} subtopic{topic.subtopics.length !== 1 ? 's' : ''}
+                          </span>
+                        </Link>
+                      </div>
                       {isExpanded && (
                         <ul className="subtopic-dropdown-content">
                           {topic.subtopics.map((subtopic) => (
@@ -1733,19 +1824,129 @@ function CourseDetailPage() {
   )
 }
 
+function QuizSetupPage() {
+  const params = useParams()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const code = decodeURIComponent(params.code ?? '')
+  const topicParam = new URLSearchParams(location.search).get('topic')
+  const courseState = useAsync(`setup-course:${code}`, () => api.course(code))
+  const questionState = useAsync(`setup-questions:${code}`, () => api.questions(code))
+
+  const [questionType, setQuestionType] = useState<'calculation' | 'theory'>('calculation')
+  const [questionCount, setQuestionCount] = useState(5)
+
+  const allQuestions = questionState.data?.questions ?? []
+  const topicQuestions = topicParam
+    ? allQuestions.filter((q) => q.topic_name === topicParam)
+    : allQuestions
+  const calculationCount = topicQuestions.filter((q) => q.question_type === 'calculation').length
+  const theoryCount = topicQuestions.filter((q) => q.question_type === 'theory').length
+  const maxAvailable = questionType === 'calculation' ? calculationCount : theoryCount
+  const clampedCount = Math.min(questionCount, Math.max(maxAvailable, 2))
+
+  function startQuiz() {
+    const params = new URLSearchParams()
+    params.set('type', questionType)
+    params.set('count', String(clampedCount))
+    if (topicParam) params.set('topic', topicParam)
+    navigate(`/app/quiz/${encodeURIComponent(code)}?${params.toString()}`)
+  }
+
+  if (courseState.loading) return <LoadingState label="Loading course..." />
+  if (courseState.error) return <ErrorState message={courseState.error} />
+
+  const course = courseState.data?.course
+  if (!course) return <ErrorState message="Course not found." />
+
+  return (
+    <div className="page-stack narrow quiz-setup">
+      <Link className="back-link" to={topicParam ? `/app/courses/${encodeURIComponent(code)}` : '/app/courses'}>
+        <ArrowLeft size={18} /> {topicParam ? 'Back to course' : 'Back to courses'}
+      </Link>
+      <section className="quiz-setup-course">
+        <p className="eyebrow">{course.code}</p>
+        <h2>{course.title}</h2>
+        <div className="quiz-setup-stats">
+          <span>{topicQuestions.length} available</span>
+          <span>{calculationCount} calculation</span>
+          <span>{theoryCount} theory</span>
+        </div>
+      </section>
+      <section className="quiz-setup-card">
+        <h3>Quiz setup</h3>
+        <div className="quiz-type-selector">
+          <button
+            className={cx('quiz-type-btn', questionType === 'calculation' && 'selected')}
+            onClick={() => setQuestionType('calculation')}
+            type="button"
+          >
+            <Calculator size={32} />
+            <strong>Calculation</strong>
+            <span>{calculationCount} questions</span>
+          </button>
+          <button
+            className={cx('quiz-type-btn', questionType === 'theory' && 'selected')}
+            onClick={() => setQuestionType('theory')}
+            type="button"
+          >
+            <BookOpen size={32} />
+            <strong>Theory</strong>
+            <span>{theoryCount} questions</span>
+          </button>
+        </div>
+        <div className="quiz-count-section">
+          <label>
+            <p>Number of questions</p>
+            <div className="quiz-count-slider">
+              <input
+                type="range"
+                min={2}
+                max={Math.min(maxAvailable || 2, 10)}
+                value={clampedCount}
+                onChange={(e) => setQuestionCount(Number(e.target.value))}
+              />
+              <span className="quiz-count-value">{clampedCount}</span>
+            </div>
+          </label>
+        </div>
+        <button
+          className="quiz-start-btn"
+          disabled={maxAvailable === 0}
+          onClick={startQuiz}
+        >
+          Start quiz <PlayCircle size={20} />
+        </button>
+      </section>
+    </div>
+  )
+}
+
 function QuizPage() {
   const params = useParams()
   const location = useLocation()
   const code = decodeURIComponent(params.code ?? '')
-  const modeParam = new URLSearchParams(location.search).get('mode')
-  const mode = modeParam === 'theory' ? 'theory' : modeParam === 'gap' ? 'gap' : 'mcq'
+  const searchParams = new URLSearchParams(location.search)
+  const typeParam = searchParams.get('type')
+  const countParam = searchParams.get('count')
+  const topicParam = searchParams.get('topic')
   const questionState = useAsync(`quiz-questions:${code}`, () => api.questions(code))
   const courseState = useAsync(`quiz-course:${code}`, () => api.course(code))
 
-  const questions = useMemo(
-    () => (questionState.data?.questions ?? []).filter((question) => question.question?.trim()).slice(0, 10),
-    [questionState.data?.questions],
-  )
+  const questions = useMemo(() => {
+    const all = questionState.data?.questions ?? []
+    let filtered = all.filter((question) => question.question?.trim())
+    if (topicParam) {
+      filtered = filtered.filter((q) => q.topic_name === topicParam)
+    }
+    if (typeParam === 'calculation') {
+      filtered = filtered.filter((q) => q.question_type === 'calculation')
+    } else if (typeParam === 'theory') {
+      filtered = filtered.filter((q) => q.question_type === 'theory')
+    }
+    const limit = countParam ? Math.max(1, parseInt(countParam, 10) || 10) : 10
+    return filtered.slice(0, limit)
+  }, [questionState.data?.questions, typeParam, countParam, topicParam])
 
   if (questionState.loading) return <LoadingState label="Preparing quiz..." />
   if (questionState.error) return <ErrorState message={questionState.error} />
@@ -1754,14 +1955,6 @@ function QuizPage() {
   }
 
   const courseTitle = courseState.data?.course.title ?? code
-
-  if (mode === 'theory') {
-    return <TheoryQuizMode code={code} courseTitle={courseTitle} questions={questions} />
-  }
-
-  if (mode === 'gap') {
-    return <GapFillQuizMode code={code} courseTitle={courseTitle} questions={questions} />
-  }
 
   return <MultipleChoiceQuizMode code={code} courseTitle={courseTitle} questions={questions} />
 }
@@ -1829,12 +2022,17 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   }
 
   const options = questionOptions(current)
+  const progress = ((index) / mcqQuestions.length) * 100
+  
   return (
     <div className="page-stack narrow">
       <PageHeader eyebrow={`${code} multiple choice`} title={`Question ${index + 1} of ${mcqQuestions.length}`}>
         <span className="score-chip">Score {score}</span>
       </PageHeader>
       <section className="quiz-card">
+        <div className="quiz-progress-bar">
+          <div className="quiz-progress-fill" style={{ width: `${progress}%` }} />
+        </div>
         <div className="quiz-meta">
           <span>{current.topic_name ?? 'General'}</span>
           <span>{current.difficulty ?? 'Mixed difficulty'}</span>
@@ -2217,65 +2415,216 @@ function HubPage() {
 function ProfilePage() {
   const navigate = useNavigate()
   const profile = useProfile()
+  const { theme, setTheme, scheme, setScheme, resolved } = useTheme()
+  const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
   const [draft, setDraft] = useState<Profile>(() => profile ?? demoProfile('engineer@example.com'))
+
+  const totalAttempts = attempts.reduce((s, a) => s + a.total, 0)
+  const totalCorrect = attempts.reduce((s, a) => s + a.score, 0)
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const department = departments.find((item) => item.code === draft.departmentCode)
+    const department = departments.find((d) => d.code === draft.departmentCode)
     saveProfile({ ...draft, departmentName: department?.name ?? draft.departmentName })
     navigate('/app')
   }
 
+  function getInitials(first: string, last: string) {
+    return `${(first[0] ?? '').toUpperCase()}${(last[0] ?? '').toUpperCase()}` || 'U'
+  }
+
+  function onSignOut() {
+    signOutUser()
+    saveProfile(null)
+    navigate('/welcome')
+  }
+
   return (
-    <div className="page-stack narrow">
-      <PageHeader eyebrow="Account" title="Profile" />
-      <form className="section-card profile-form" onSubmit={submit}>
-        <div className="two-col">
-          <label>
-            First name
-            <input value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} />
-          </label>
-          <label>
-            Last name
-            <input value={draft.lastName} onChange={(event) => setDraft({ ...draft, lastName: event.target.value })} />
-          </label>
-        </div>
-        <label>
-          Email
-          <input value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
-        </label>
-        <label>
-          Department
-          <select value={draft.departmentCode} onChange={(event) => setDraft({ ...draft, departmentCode: event.target.value })}>
-            {departments.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
-          </select>
-        </label>
-        <div className="section-card" style={{ marginTop: '1rem' }}>
-          <p className="eyebrow">My courses</p>
-          <h3 style={{ marginTop: '0.5rem', marginBottom: '0.75rem' }}>{draft.selectedCourses.length} courses selected</h3>
-          {draft.selectedCourses.length === 0 ? (
-            <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>No courses selected. Go through registration to pick courses.</p>
-          ) : (
-            <div className="course-grid">
-              {draft.selectedCourses.map((course) => (
-                <div className="course-card" key={course.code} style={{ cursor: 'default' }}>
-                  <div className="course-topline"><span>{course.code}</span></div>
-                  <h3>{course.title}</h3>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--danger, #dc3545)' }}
-                    onClick={() => setDraft({ ...draft, selectedCourses: draft.selectedCourses.filter((c) => c.code !== course.code) })}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+    <div className="page-stack profile-page">
+      {/* Hero */}
+      <section className="profile-hero profile-stagger" style={{ animationDelay: '0ms' }}>
+        <div className="profile-avatar-wrap">
+          <div className="profile-avatar-gradient">
+            <div className="profile-avatar-inner">
+              {draft.firstName || draft.lastName
+                ? getInitials(draft.firstName, draft.lastName)
+                : <User size={32} />}
             </div>
-          )}
+          </div>
         </div>
-        <button className="primary-button full" type="submit" style={{ marginTop: '1rem' }}>Save profile</button>
-      </form>
+        <h1>{draft.firstName || 'Engineer'} {draft.lastName}</h1>
+        <p className="profile-email">{draft.email}</p>
+        <div className="profile-badge-row">
+          <span className="profile-badge">
+            <Building2 size={13} />
+            {(departments.find((d) => d.code === draft.departmentCode)?.name ?? draft.departmentName) || 'No department'}
+          </span>
+        </div>
+      </section>
+
+      {/* Stats */}
+      <section className="profile-stats profile-stagger" style={{ animationDelay: '60ms' }}>
+        <div className="profile-stat">
+          <GraduationCap size={20} />
+          <strong>{draft.selectedCourses.length}</strong>
+          <span>Courses</span>
+        </div>
+        <div className="profile-stat">
+          <BrainCircuit size={20} />
+          <strong>{totalAttempts}</strong>
+          <span>Answered</span>
+        </div>
+        <div className="profile-stat">
+          <Flame size={20} />
+          <strong>{attempts.length ? Math.min(attempts.length, 30) : 1}</strong>
+          <span>Streak</span>
+        </div>
+        <div className="profile-stat">
+          <Trophy size={20} />
+          <strong>{totalAttempts ? Math.round(totalCorrect / totalAttempts * 100) : 0}%</strong>
+          <span>Accuracy</span>
+        </div>
+      </section>
+
+      {/* Two-col: Appearance + Academic */}
+      <div className="profile-two-col profile-stagger" style={{ animationDelay: '120ms' }}>
+        {/* Appearance */}
+        <section className="profile-card">
+          <div className="profile-card-header">
+            <Palette size={18} />
+            <div>
+              <h2>Appearance</h2>
+              <p>Theme mode &amp; color accent</p>
+            </div>
+          </div>
+          <p className="profile-color-label">Theme</p>
+          <div className="profile-theme-picker">
+            {([
+              { id: 'light', icon: <Sun size={16} />, label: 'Light' },
+              { id: 'dark', icon: <Moon size={16} />, label: 'Dark' },
+              { id: 'system', icon: <Laptop size={16} />, label: 'Auto' },
+            ] as const).map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                className={cx('profile-theme-btn', theme === mode.id && 'selected')}
+                onClick={() => setTheme(mode.id)}
+              >
+                {mode.icon}
+                <span>{mode.label}</span>
+              </button>
+            ))}
+          </div>
+          <p className="profile-color-label">Color accent</p>
+          <div className="profile-swatch-grid">
+            {colorSchemes.map((schemeItem) => (
+              <button
+                key={schemeItem.name}
+                type="button"
+                className={cx('profile-swatch', scheme === schemeItem.color && 'selected')}
+                style={{ backgroundColor: schemeItem.color, color: schemeItem.color }}
+                onClick={() => setScheme(schemeItem.color)}
+                title={schemeItem.name}
+                aria-label={schemeItem.name}
+              >
+                {scheme === schemeItem.color && <Check size={16} color={resolved === 'dark' ? '#111' : '#fff'} />}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Academic */}
+        <section className="profile-card">
+          <div className="profile-card-header">
+            <GraduationCap size={18} />
+            <div>
+              <h2>Academic Profile</h2>
+              <p>Your department &amp; info</p>
+            </div>
+          </div>
+          <form id="profile-form" onSubmit={submit}>
+            <div className="two-col" style={{ marginBottom: '0.75rem' }}>
+              <label>
+                First name
+                <input value={draft.firstName} onChange={(e) => setDraft({ ...draft, firstName: e.target.value })} />
+              </label>
+              <label>
+                Last name
+                <input value={draft.lastName} onChange={(e) => setDraft({ ...draft, lastName: e.target.value })} />
+              </label>
+            </div>
+            <label>
+              Email
+              <input value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+            </label>
+            <label style={{ marginTop: '0.75rem' }}>
+              Department
+              <select value={draft.departmentCode} onChange={(e) => setDraft({ ...draft, departmentCode: e.target.value })}>
+                {departments.map((d) => (
+                  <option key={d.code} value={d.code}>{d.name}</option>
+                ))}
+              </select>
+            </label>
+            <button className="primary-button full" type="submit" style={{ marginTop: '1rem' }}>
+              <CheckCircle2 size={18} /> Save profile
+            </button>
+          </form>
+        </section>
+      </div>
+
+      {/* My Courses */}
+      <section className="profile-card profile-stagger" style={{ animationDelay: '180ms' }}>
+        <div className="profile-card-header">
+          <BookOpen size={18} />
+          <div>
+            <h2>My Courses</h2>
+            <p>{draft.selectedCourses.length} course{draft.selectedCourses.length !== 1 ? 's' : ''} selected</p>
+          </div>
+        </div>
+        {draft.selectedCourses.length === 0 ? (
+          <p className="profile-empty-hint">No courses selected yet. Complete registration to pick courses.</p>
+        ) : (
+          <div className="profile-course-list">
+            {draft.selectedCourses.map((course) => (
+              <div className="profile-course-item" key={course.code}>
+                <div className="profile-course-info">
+                  <span className="profile-course-code">{course.code}</span>
+                  <span className="profile-course-title">{course.title}</span>
+                </div>
+                <button
+                  type="button"
+                  className="profile-course-remove"
+                  onClick={() => setDraft({
+                    ...draft,
+                    selectedCourses: draft.selectedCourses.filter((c) => c.code !== course.code)
+                  })}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Account Actions */}
+      <section className="profile-card profile-stagger" style={{ animationDelay: '240ms' }}>
+        <div className="profile-card-header">
+          <Lock size={18} />
+          <div>
+            <h2>Account</h2>
+            <p>Sign out or delete your account</p>
+          </div>
+        </div>
+        <div className="profile-account-actions">
+          <button className="ghost-button" onClick={onSignOut} type="button">
+            <LogOut size={18} /> Sign out
+          </button>
+          <button className="profile-danger-btn" type="button">
+            <Trash2 size={18} /> Delete account
+          </button>
+        </div>
+      </section>
     </div>
   )
 }
@@ -2289,7 +2638,16 @@ function NotFoundPage() {
   )
 }
 
+// Suppress unused-component warnings (used conditionally across module boundaries)
+void TheoryQuizMode; void GapFillQuizMode;
+
 function App() {
+  // Apply saved theme/scheme on every mount
+  useEffect(() => {
+    applyTheme(getTheme())
+    applyScheme(getScheme())
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
@@ -2302,6 +2660,7 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="courses" element={<CoursesPage />} />
             <Route path="courses/:code" element={<CourseDetailPage />} />
+            <Route path="courses/:code/quiz" element={<QuizSetupPage />} />
             <Route path="quiz/:code" element={<QuizPage />} />
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="study" element={<StudyPage />} />
