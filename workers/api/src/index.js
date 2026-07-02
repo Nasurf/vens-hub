@@ -180,19 +180,71 @@ async function handleUploadFinalize(request, env) {
 
 async function handleAssistant(request, env) {
   const body = await request.json();
-  const question = String(body.question || '').trim();
   const context = String(body.context || '').trim();
-  if (!question) return error('question is required');
+  const systemPrompt = String(body.systemPrompt || '').trim();
   if (!env.GEMINI_API_KEY) return error('GEMINI_API_KEY is not configured', 501);
 
-  const model = env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
-  const prompt = `${context ? `Context: ${context}\n\n` : ''}Question: ${question}\n\nPlease provide a helpful, clear answer. Explain concepts clearly, use examples when helpful, format mathematical expressions plainly, and be concise but thorough.`;
-  const geminiResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`, {
+  const model = env.GEMINI_MODEL || 'gemma-4-31b-it';
+
+  // Support both formats:
+  // 1. { question, context } — from web app AIAssistantPanel
+  // 2. { messages: [{role, text}], context } — multi-turn format
+  let contents;
+  if (Array.isArray(body.messages) && body.messages.length > 0) {
+    contents = body.messages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: String(msg.text || '') }],
+    }));
+  } else {
+    const question = String(body.question || '').trim();
+    if (!question) return error('question is required');
+    const promptText = context ? `Context: ${context}\n\nQuestion: ${question}` : question;
+    contents = [{ role: 'user', parts: [{ text: promptText }] }];
+  }
+
+  // Prepend system prompt as a user/model exchange so it's always enforced
+  if (systemPrompt) {
+    contents = [
+      { role: 'user', parts: [{ text: systemPrompt }] },
+      { role: 'model', parts: [{ text: 'Understood. I will follow these instructions strictly.' }] },
+      ...contents,
+    ];
+  }
+
+  // Inject context into the last user message so the model always knows the question
+  if (context) {
+    let lastUserIdx = -1;
+    for (let i = contents.length - 1; i >= 0; i--) {
+      if (contents[i].role === 'user') { lastUserIdx = i; break; }
+    }
+    if (lastUserIdx !== -1) {
+      contents[lastUserIdx].parts[0].text =
+        `[Question context for this session]\n${context}\n\n[Student message]\n${contents[lastUserIdx].parts[0].text}`;
+    }
+  }
+
+  // Gemini requires strict user/model alternation — merge consecutive same-role turns
+  const merged = [];
+  for (const turn of contents) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === turn.role) {
+      last.parts.push(...turn.parts);
+    } else {
+      merged.push({ role: turn.role, parts: [...turn.parts] });
+    }
+  }
+  // Must start with a user turn
+  if (merged.length > 0 && merged[0].role !== 'user') {
+    merged.unshift({ role: 'user', parts: [{ text: '(begin)' }] });
+  }
+  contents = merged;
+
+  const geminiResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-goog-api-key': env.GEMINI_API_KEY },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+      contents,
+      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
     }),
   });
 
@@ -202,8 +254,17 @@ async function handleAssistant(request, env) {
   }
 
   const data = await geminiResp.json();
-  const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('\n').trim();
-  return json({ answer: answer || 'No answer was returned by Gemini.' });
+  // gemma-4-31b-it puts thinking inline in the text; the real answer is always the last paragraph
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const rawText = parts
+    .filter((part) => !part.thoughtSignature && part.text)
+    .map((part) => part.text.trim())
+    .join('\n')
+    .trim();
+  // Extract last non-empty paragraph as the clean answer
+  const paragraphs = rawText.split('\n').map((p) => p.trim()).filter(Boolean);
+  const answer = paragraphs[paragraphs.length - 1] || rawText;
+  return json({ answer: answer || 'No answer was returned by Gemma.' });
 }
 
 export default {
@@ -768,7 +829,7 @@ export default {
       }
 
       if (path === '/health') {
-        return json({ status: 'ok', db: 'vens-hub-questions' });
+        return json({ status: 'ok', db: 'vens-hub-questions-v2' });
       }
 
       // ── Existing: Courses ────────────────────────────────────────
@@ -836,7 +897,7 @@ export default {
       if (segments[0] === 'courses' && segments.length === 3 && segments[2] === 'questions') {
         const courseCode = segments[1];
         const { results } = await db.prepare(
-          'SELECT id, topic_name, subtopic_name, question_type, difficulty, difficulty_ranking, question, options, correct_answer_index, correct_answer, correct_answer_text, explanation, solution_steps, rag_sources FROM questions WHERE course_code = ? ORDER BY topic_name, difficulty_ranking'
+          'SELECT id, topic_name, subtopic_name, question_type, difficulty, difficulty_ranking, question, options, correct_answer_index, correct_answer, correct_answer_text, explanation, solution_steps FROM questions WHERE course_code = ? ORDER BY topic_name, difficulty_ranking'
         ).bind(courseCode).all();
         return json({ questions: results, count: results.length });
       }
@@ -890,7 +951,7 @@ export default {
       if (segments[0] === 'questions' && segments.length === 2) {
         const courseCode = segments[1];
         const { results } = await db.prepare(
-          'SELECT id, topic_name, subtopic_name, question_type, difficulty, difficulty_ranking, question, options, correct_answer_index, correct_answer, correct_answer_text, explanation, solution_steps, rag_sources FROM questions WHERE course_code = ? ORDER BY topic_name, difficulty_ranking'
+          'SELECT id, topic_name, subtopic_name, question_type, difficulty, difficulty_ranking, question, options, correct_answer_index, correct_answer, correct_answer_text, explanation, solution_steps FROM questions WHERE course_code = ? ORDER BY topic_name, difficulty_ranking'
         ).bind(courseCode).all();
         return json({ questions: results, count: results.length });
       }

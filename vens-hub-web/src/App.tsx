@@ -632,21 +632,17 @@ async function uploadStudyFile(file: File, profile: Profile | null): Promise<Stu
   }
 }
 
-function makeAssistantFallback(question: string, context?: string) {
-  void question
-  void context
-  return 'The study helper is unavailable right now. Please try again in a moment.'
-}
-
-async function askAssistant(question: string, context?: string) {
+async function askAssistant(messages: AssistantMessage[], context?: string, systemPrompt?: string) {
+  const baseUrl = ASSISTANT_API_BASE || API_BASE
   try {
-    const response = await postJson<{ answer?: string }>(ASSISTANT_API_BASE, '/assistant', {
-      question,
+    const response = await postJson<{ answer?: string }>(baseUrl, '/assistant', {
+      messages: messages.map(({ role, text }) => ({ role, text })),
       context,
+      systemPrompt,
     })
-    return response.answer?.trim() || makeAssistantFallback(question, context)
+    return response.answer?.trim() || 'No answer was returned.'
   } catch {
-    return makeAssistantFallback(question, context)
+    return 'The AI assistant is not available right now. Try again later.'
   }
 }
 
@@ -1543,9 +1539,7 @@ function RequireAuth() {
 function AppShell() {
   const profile = useProfile()
   const navigate = useNavigate()
-  const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
   const navItems = [
     { to: '/app', label: 'Home', icon: <Home size={22} />, end: true },
     { to: '/app/schedule', label: 'Schedule', icon: <CalendarDays size={22} /> },
@@ -1600,25 +1594,16 @@ function AppShell() {
       <section className="app-main">
         <Outlet />
       </section>
-      <AIAssistantPanel
-        context={`Route: ${location.pathname}. User: ${profile?.firstName ?? 'Student'} in ${profile?.departmentName ?? 'engineering'}.`}
-        onClose={() => setAssistantOpen(false)}
-        open={assistantOpen}
-      />
-      <button className="ai-fab" onClick={() => setAssistantOpen(true)} type="button">
-        <MessageCircle size={22} />
-        <span>AI Assistant</span>
-      </button>
     </div>
   )
 }
 
-function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: () => void; context: string }) {
+function AIAssistantPanel({ open, onClose, context, systemPrompt }: { open: boolean; onClose: () => void; context: string; systemPrompt?: string }) {
   const [messages, setMessages] = useState<AssistantMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Ask for a hint, a concept explanation, quiz help, or study guidance.',
+      text: "I'm your study guide. I can help you understand concepts, work through reasoning, and find hints — but I won't give you the answer directly. What do you need help with?",
     },
   ])
   const [draft, setDraft] = useState('')
@@ -1638,7 +1623,8 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
     setDraft('')
     setIsLoading(true)
     try {
-      const answer = await askAssistant(question, context)
+      const updatedMessages = [...messages, userMessage]
+      const answer = await askAssistant(updatedMessages, context, systemPrompt)
       setMessages((items) => [...items, { id: crypto.randomUUID(), role: 'assistant', text: answer }])
     } catch (error) {
       setMessages((items) => [
@@ -1667,7 +1653,7 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
             </span>
             <div>
               <p className="eyebrow">AI Assistant</p>
-              <h2>Study helper</h2>
+              <h2>Study Guide</h2>
             </div>
           </div>
           <div className="assistant-actions">
@@ -2225,6 +2211,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   const [finished, setFinished] = useState(false)
   const [adaptiveSynced, setAdaptiveSynced] = useState(false)
   const [adaptiveResult, setAdaptiveResult] = useState<{ synced: boolean; count: number } | null>(null)
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const current = mcqQuestions[index]
   const score = answers.filter((answer) => answer.selected === answer.correct).length
   const lastAnswer = answers[answers.length - 1]
@@ -2304,6 +2291,28 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   const progress = ((index) / mcqQuestions.length) * 100
   const solutionSteps = parseJsonList(current.solution_steps)
   
+  const quizSystemPrompt = `You are a study guide assistant for engineering students. Your job is to EXPLAIN concepts clearly and help students understand the topic — not to quiz them back with more questions.
+
+Rules:
+1. When a student says they don't understand, EXPLAIN the concept directly and clearly with definitions, examples, and real-world analogies. Do not respond with a question.
+2. Give real explanations: define terms, provide examples, break down the reasoning. Be a teacher, not a quiz master.
+3. NEVER end your response with a question. Just explain clearly and stop.
+4. Never state or confirm which answer option (A, B, C, D) is correct. Never say "the answer is X".
+5. If the student has already answered (correctly or not), you may explain the underlying concept in depth without revealing the answer.
+6. Only respond to academic questions related to engineering, mathematics, physics, or science. If asked anything unrelated to academics, politely decline and redirect to the topic.
+7. Be concise, clear, and educational. Explain like a good lecturer would.`
+
+  const quizContext = current ? [
+    `Course: ${courseTitle} (${code})`,
+    `Topic: ${current.topic_name ?? 'General'}`,
+    `Difficulty: ${current.difficulty ?? 'Unknown'}`,
+    `Question: ${current.question}`,
+    `Options: ${questionOptions(current).map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt}`).join(' | ')}`,
+    showResult ? `Correct answer: ${String.fromCharCode(65 + answerIndex(current))}. ${current.correct_answer_text || ''}` : '(Answer not yet revealed — do not hint at it)',
+    current.explanation ? `Explanation: ${current.explanation}` : '',
+    parseJsonList(current.solution_steps).length > 0 ? `Solution steps: ${parseJsonList(current.solution_steps).join(' → ')}` : '',
+  ].filter(Boolean).join('\n') : `Course: ${courseTitle} (${code})`
+
   return (
     <div className="page-stack narrow">
       <PageHeader eyebrow={`${code} multiple choice`} title={`Question ${index + 1} of ${mcqQuestions.length}`}>
@@ -2392,6 +2401,18 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
           </div>
         )}
       </section>
+
+      {/* Quiz AI Assistant — only visible on the quiz page */}
+      <AIAssistantPanel
+        context={quizContext}
+        systemPrompt={quizSystemPrompt}
+        onClose={() => setAssistantOpen(false)}
+        open={assistantOpen}
+      />
+      <button className="ai-fab" onClick={() => setAssistantOpen(true)} type="button">
+        <MessageCircle size={22} />
+        <span>Study Guide</span>
+      </button>
     </div>
   )
 }

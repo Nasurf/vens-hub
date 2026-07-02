@@ -5,8 +5,8 @@ compatibility_date = "2025-01-01"
 # D1 Database binding
 [[d1_databases]]
 binding = "QUESTIONS_DB"
-database_name = "vens-hub-questions"
-database_id = "c9949c3a-09a9-4b43-b39f-b15e30c38b99"
+database_name = "vens-hub-questions-v2"
+database_id = "fc097b23-2d08-48ec-b63a-d24e6f62190f"
 
 # Public CDN/custom domain used when returning uploaded study material URLs.
 # Keep secrets out of this file. Set GEMINI_API_KEY and UPLOAD_SIGNING_SECRET with:
@@ -14,7 +14,7 @@ database_id = "c9949c3a-09a9-4b43-b39f-b15e30c38b99"
 #   wrangler secret put UPLOAD_SIGNING_SECRET
 [vars]
 R2_PUBLIC_DOMAIN = "https://files.nuesaabuad.ng"
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemma-4-31b-it"
 
 # Bind the production R2 bucket before deploying upload support.
 # Replace bucket_name with the real Cloudflare R2 bucket name if it differs.
@@ -28,7 +28,7 @@ account_id = "a06481b3ed7ddcf617cc917bf38d39d4"
 
 [env.production.vars]
 R2_PUBLIC_DOMAIN = "https://files.nuesaabuad.ng"
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemma-4-31b-it"
 
 [[env.production.r2_buckets]]
 binding = "STUDY_MATERIALS_BUCKET"
