@@ -4,6 +4,7 @@ import 'package:vens_hub/core/Brain/data_formatting.dart' as df;
 import 'package:vens_hub/core/router/app_router.dart';
 import 'package:vens_hub/core/router/routes.dart';
 import 'package:vens_hub/core/services/data/firestore_service.dart';
+import 'package:vens_hub/adaptive/lib/src/adaptive_service.dart';
 import 'package:vens_hub/data/models/question_model.dart';
 import 'package:vens_hub/presentation/blocs/home/home_controller.dart';
 import 'package:vens_hub/presentation/blocs/quiz/quiz_bloc.dart';
@@ -142,6 +143,39 @@ class _CompletionPageDesktopState extends State<CompletionPageDesktop>
           items: _buildAttemptItems(quizState),
         );
       } catch (_) {}
+
+      // Submit per-topic results to adaptive engine
+      _syncAdaptiveResults(quizState, userId);
+    }
+  }
+
+  void _syncAdaptiveResults(QuizState state, String userId) {
+    final List<Map<String, dynamic>> results = [];
+    for (int i = 0; i < state.allQuestions.length; i++) {
+      final q = state.allQuestions[i];
+      bool correct = false;
+      String? topic;
+      if (q is Question) {
+        correct = state.mcqIsCorrect[i] ?? false;
+        topic = q.topic;
+      } else if (q is df.GapFillQuestion) {
+        final matched = state.gapFillCorrectCountByQuestion[i] ?? 0;
+        final total = state.gapFillTotalGapsByQuestion[i] ?? q.answers.length;
+        correct = total > 0 && matched >= total;
+        topic = q.topic;
+      } else if (q is df.TheoryQuestion) {
+        continue;
+      } else {
+        continue;
+      }
+      results.add({
+        'topicName': topic ?? state.choosenTopic ?? 'General',
+        'courseCode': state.course,
+        'isCorrect': correct,
+      });
+    }
+    if (results.isNotEmpty) {
+      AdaptiveService().submitBatch(userId, results);
     }
   }
 

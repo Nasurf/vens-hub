@@ -7,6 +7,8 @@ import 'package:vens_hub/core/services/data/firestore_service.dart';
 import 'package:intl/intl.dart';
 import 'package:vens_hub/presentation/widgets/common/themed_hub_icon.dart';
 import 'package:vens_hub/data/models/user_model.dart';
+import 'package:vens_hub/adaptive/lib/src/adaptive_service.dart';
+import 'package:vens_hub/core/services/adaptive/adaptive_storage_service.dart';
 
 class QuizAttemptSummary {
   QuizAttemptSummary({
@@ -103,6 +105,16 @@ class HubController extends GetxController {
     final initialUserId = _homeController.currentUser.value?.id;
     if (initialUserId != null && initialUserId.isNotEmpty) {
       _loadAnalytics();
+      _seedAdaptiveMastery(initialUserId);
+    }
+  }
+
+  /// Sync local KC states from get_storage to the D1 server.
+  void _seedAdaptiveMastery(String userId) {
+    final storage = AdaptiveStorageService();
+    final kcStates = storage.getKcStates();
+    if (kcStates.isNotEmpty) {
+      AdaptiveService().seedMastery(userId, kcStates);
     }
   }
 
