@@ -59,7 +59,6 @@ dependencies:
   flutter_staggered_grid_view: ^0.7.0
   google_generative_ai: ^0.4.6
   google_sign_in: ^7.1.1
-  flutter_launcher_icons: ^0.14.4
   # icons_plus removed (using local SVG for Google icon)
   connectivity_plus: ^6.1.4
   meta: ^1.16.0
@@ -79,6 +78,7 @@ dependencies:
   logger: ^2.6.2
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.14.4
   hive_generator: ^2.0.1
   build_runner: ^2.4.8
   flutter_test:

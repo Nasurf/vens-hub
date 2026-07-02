@@ -39,12 +39,13 @@ node_modules/
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
-pubspec.lock
 
 # IDE
 .idea/
 .vscode/
 *.iml
+bin/
+.hermes/
 
 # Agent skills
 .agents/
@@ -78,6 +79,12 @@ google-services.json
 GoogleService-Info.plist
 
 # Service accounts
+service-account.json
+service-account*.json
 *-service-account*.json
 *-credentials*.json
 lib/firebase_options.dart
+
+# Question bank data (large, not source code)
+BANK/
+BANK/.upload_checkpoint.json

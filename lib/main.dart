@@ -55,7 +55,12 @@ void main() async {
 
   final diag = Get.put(StartupDiagnosticsController(), permanent: true);
 
-  await _bootstrapCore(diag);
+  try {
+    await _bootstrapCore(diag);
+  } catch (e, stack) {
+    log('CRITICAL: Bootstrap failed: $e\n$stack');
+    diag.fail('bootstrap', e);
+  }
 
   diag.start('runApp');
   runApp(
@@ -84,7 +89,13 @@ Future<void> _bootstrapCore(StartupDiagnosticsController diag) async {
   diag.success('dotenv');
 
   diag.start('Firebase.initializeApp');
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (Firebase.apps.isEmpty) {
+    if (kIsWeb) {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    } else {
+      await Firebase.initializeApp();
+    }
+  }
   diag.success('Firebase.initializeApp');
 
   if (!kIsWeb) {
@@ -474,7 +485,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             return Stack(
               children: [
                 if (child != null) child,
-                if (kIsWeb && kDebugMode)
+                if (kDebugMode)
                   Overlay(
                     initialEntries: [
                       OverlayEntry(
