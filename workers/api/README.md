@@ -1,8 +1,8 @@
 # Vens Hub API
 
-Base URL: `https://vens-hub-api.nasurf25.workers.dev`
-
 Cloudflare Worker backed by D1 database (`vens-hub-questions`). 9 engineering departments, 426 courses, ~142K questions + user performance monitoring.
+
+**Base URL is set via `API_BASE_URL` in your `assets/.env` file — see `.env.example` for the template.**
 
 ---
 
