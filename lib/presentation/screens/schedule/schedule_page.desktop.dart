@@ -637,6 +637,7 @@ class _DesktopScheduleScreenState extends State<DesktopScheduleScreen> {
           _calendarFormat = format;
         });
       },
+      eventLoader: (day) => _scheduleRepo.getCombinedEventsForDay(day),
       selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
       onDaySelected: (selectedDay, focusedDay) {
         if (!isSameDay(_selectedDay, selectedDay)) {
