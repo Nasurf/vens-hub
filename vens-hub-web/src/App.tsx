@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleUserRound,
   ClipboardList,
@@ -37,6 +38,7 @@ import {
   User,
   X,
 } from 'lucide-react'
+import clsx from 'clsx'
 import {
   BrowserRouter,
   Link,
@@ -344,11 +346,11 @@ const api = {
       `/courses${queryStr ? `?${queryStr}` : ''}`
     )
   },
-  departmentCourses: (code: string, q?: string, limit?: number, cursor?: number) => {
+  departmentCourses: (name: string, q?: string, limit?: number, cursor?: number) => {
     const params = new URLSearchParams({ limit: String(limit ?? 20), cursor: String(cursor ?? 0) })
     if (q) params.set('q', q)
     return fetchJson<{ courses: Course[]; total: number; hasMore: boolean; nextCursor: number }>(
-      `/departments/${encodeURIComponent(code)}/courses?${params}`
+      `/departments/${encodeURIComponent(name)}/courses?${params}`
     )
   },
   course: (code: string) => fetchJson<{ course: Course }>(`/courses/${encodeURIComponent(code)}`),
@@ -861,6 +863,7 @@ function RegisterPage() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [departmentCode, setDepartmentCode] = useState('')
+  const [departmentName, setDepartmentName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -891,7 +894,7 @@ function RegisterPage() {
     setCourseLoading(true)
     setCourseError('')
     try {
-      const data = await api.departmentCourses(departmentCode, query, 20, cursor)
+      const data = await api.departmentCourses(departmentName, query, 20, cursor)
       setCourseList((prev) => append ? [...prev, ...data.courses] : data.courses)
       setCourseTotal(data.total)
       setCourseHasMore(data.hasMore)
@@ -914,13 +917,14 @@ function RegisterPage() {
 
   // Initial load when entering step 2
   useEffect(() => {
-    if (step === 2 && departmentCode && courseList.length === 0) {
+    if (step === 2 && departmentName && courseList.length === 0) {
       fetchCourses('', 0, false)
     }
-  }, [step, departmentCode])
+  }, [step, departmentName])
 
-  function handleDepartmentSelect(code: string) {
+  function handleDepartmentSelect(code: string, name: string) {
     setDepartmentCode(code)
+    setDepartmentName(name)
     setSelectedCourses([])
     setCourseList([])
     setCourseSearch('')
@@ -1614,7 +1618,31 @@ function CourseDetailPage() {
   if (!course) return <ErrorState message="Course was not returned by the API." />
   const outline = courseOutline(course)
   const questions = questionState.data?.questions ?? []
-  const topics = Array.from(new Set(questions.map((question) => question.topic_name).filter(Boolean)))
+  // Group by topic and find unique subtopics
+  const topicsList = useMemo(() => {
+    const map: Record<string, Set<string>> = {}
+    questions.forEach((q) => {
+      const topic = q.topic_name || 'General'
+      const subtopic = q.subtopic_name || 'General'
+      if (!map[topic]) {
+        map[topic] = new Set()
+      }
+      map[topic].add(subtopic)
+    })
+    return Object.entries(map).map(([topicName, subtopicsSet]) => ({
+      name: topicName,
+      subtopics: Array.from(subtopicsSet).filter(Boolean).sort(),
+    })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [questions])
+
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({})
+
+  const toggleTopic = (topicName: string) => {
+    setExpandedTopics((prev) => ({
+      ...prev,
+      [topicName]: !prev[topicName],
+    }))
+  }
 
   return (
     <div className="page-stack">
@@ -1665,8 +1693,38 @@ function CourseDetailPage() {
           {questionState.loading && <LoadingState label="Loading questions..." />}
           {questionState.error && <ErrorState message={questionState.error} />}
           {!questionState.loading && !questionState.error && (
-            <div className="topic-cloud">
-              {topics.slice(0, 20).map((topic) => <span key={topic}>{topic}</span>)}
+            <div className="topic-dropdown-list">
+              {topicsList.length === 0 ? (
+                <EmptyState icon={<BrainCircuit />} title="No topics available" body="This course has no loaded topics in the API yet." />
+              ) : (
+                topicsList.map((topic) => {
+                  const isExpanded = !!expandedTopics[topic.name]
+                  return (
+                    <div key={topic.name} className="topic-dropdown-item">
+                      <button
+                        type="button"
+                        className="topic-dropdown-header"
+                        onClick={() => toggleTopic(topic.name)}
+                      >
+                        <span className={clsx("chevron-icon", isExpanded && "expanded")}>
+                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </span>
+                        <strong>{topic.name}</strong>
+                        <span className="subtopic-count-badge">
+                          {topic.subtopics.length} subtopic{topic.subtopics.length !== 1 ? 's' : ''}
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <ul className="subtopic-dropdown-content">
+                          {topic.subtopics.map((subtopic) => (
+                            <li key={subtopic}>{subtopic}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })
+              )}
             </div>
           )}
         </article>
