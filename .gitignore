@@ -85,6 +85,21 @@ pubspec.lock
 .agents/
 skills-lock.json
 
+# Secrets and local Firebase/client config
+.env.*
+assets/.env
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
+google-services.json
+GoogleService-Info.plist
+lib/firebase_options.dart
+android/local.properties
+*.jks
+*.keystore
+*-service-account*.json
+*-credentials*.json
+
 # OS
 .DS_Store
 Thumbs.db

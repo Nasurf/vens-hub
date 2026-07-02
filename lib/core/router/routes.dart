@@ -8,9 +8,6 @@ class AppRoutes {
   static const String forgotPassword = "/forgot-password";
   static const String resetPassword = "/reset-password";
   static const String completeProfile = "/complete-profile";
-  static const String emailVerification = "/verify-email";
-  // Public landing URL for verification links
-  static const String verify = "/verify";
 
   // Main Navigation - SEO Friendly
   static const String home = "/home";

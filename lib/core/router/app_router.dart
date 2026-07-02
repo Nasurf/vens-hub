@@ -8,7 +8,6 @@ import 'package:vens_hub/data/models/course_info.dart';
 import 'package:vens_hub/presentation/screens/quiz/Review/review_page.dart';
 import 'package:vens_hub/presentation/screens/quiz/DailyCongrats/daily_congrats_page.dart';
 import 'package:vens_hub/presentation/screens/auth/forgot_password/forgot_password.dart';
-import '../../presentation/screens/auth/email_verification/email_verification_screen.dart';
 import '../../presentation/screens/home/main_screen/main_screen.dart';
 import 'routes.dart';
 import 'package:vens_hub/presentation/screens/auth/signin/sign_in.dart';
@@ -77,17 +76,6 @@ class AppRouter {
     GetPage(
       name: AppRoutes.completeProfile,
       page: () => const CompleteProfileScreen(),
-      transition: kIsWeb ? Transition.fadeIn : Transition.native,
-    ),
-    GetPage(
-      name: AppRoutes.emailVerification,
-      page: () => const EmailVerificationScreen(),
-      transition: kIsWeb ? Transition.fadeIn : Transition.native,
-    ),
-    // Public verify path – used as landing after email verification
-    GetPage(
-      name: AppRoutes.verify,
-      page: () => const EmailVerificationScreen(),
       transition: kIsWeb ? Transition.fadeIn : Transition.native,
     ),
 

@@ -43,8 +43,6 @@ import 'package:vens_hub/core/services/notification_background_service.dart';
 
 import 'package:vens_hub/domain/auth/usecases/complete_user_profile_data_storage_usecase.dart';
 
-import '../../domain/auth/usecases/check_email_verification_usecase.dart';
-import '../../domain/auth/usecases/send_verification_email_usecase.dart';
 import '../../domain/auth/usecases/delete_account_usecase.dart';
 import '../services/auth/firebase_auth_service.dart';
 
@@ -159,8 +157,6 @@ Future<void> initDI() async {
     sl.registerLazySingleton(() => SignOutUserUseCase(sl()));
     sl.registerLazySingleton(() => DeleteAccountUseCase(sl()));
     sl.registerLazySingleton(() => GetCurrentUserUseCase(sl()));
-    sl.registerLazySingleton(() => SendVerificationEmailUseCase(sl()));
-    sl.registerLazySingleton(() => CheckEmailVerificationUseCase(sl()));
 
     sl.registerLazySingleton(() => CompleteUserProfileDataStorageUseCase(sl()));
 
@@ -178,8 +174,6 @@ Future<void> initDI() async {
         signUpUserUseCase: sl(),
         signOutUserUseCase: sl(),
         completeUserProfileDataStorageUseCase: sl(),
-        sendVerificationEmailUseCase: sl(),
-        checkEmailVerificationUseCase: sl(),
       ),
     );
 
