@@ -71,7 +71,7 @@ import {
   submitBatchResults,
   getUserStats,
   getUserMastery,
-  getCourseMastery,
+  getUserMasteryForCourse,
   getUserAttempts,
   type AdaptiveAttempt,
   type CourseStats,
@@ -2938,8 +2938,8 @@ function CourseAnalyticsPage() {
     setLoading(true)
     setError('')
     Promise.all([
-      getCourseMastery(userId, courseCode),
-      getUserAttempts(userId, courseCode, 200),
+      getUserMasteryForCourse(userId, courseCode),
+      getUserAttempts(userId, { course: courseCode, limit: 200 }),
     ]).then(([courseMastery, attemptHistory]) => {
       if (!active) return
       setMastery(courseMastery.topics ?? [])
