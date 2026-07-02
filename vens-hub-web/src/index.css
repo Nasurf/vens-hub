@@ -89,6 +89,11 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --danger: #dc2626;
+  --warning: #d97706;
+  --success: #059669;
+  --mastery-high: #10b981;
+  --mastery-mid: #f59e0b;
+  --mastery-low: #ef4444;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -112,6 +117,12 @@
   --shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --success: #34d399;
+  --mastery-high: #34d399;
+  --mastery-mid: #fbbf24;
+  --mastery-low: #f87171;
 }
 
 [data-theme="dark"] body {
@@ -1390,7 +1401,7 @@ label {
 .metrics-grid {
   display: grid;
   gap: 0.85rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 2fr 1fr 1fr 1fr;
 }
 
 .metric-card {
@@ -2245,7 +2256,7 @@ label {
   }
   
   .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
   }
   
   .metric-card {
@@ -2626,9 +2637,7 @@ label {
 .file-list article,
 .attempt-list article {
   align-items: center;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--card);
   border: 1px solid rgba(15, 155, 142, 0.12);
   border-radius: var(--radius-md);
   display: grid;
@@ -2769,19 +2778,19 @@ label {
   display: block;
   height: 100%;
   border-radius: 4px;
-  transition: width 400ms var(--ease-out);
+  transition: width 250ms var(--ease-out);
 }
 
 .mastery-bar-fill.mastery-high {
-  background: #10b981;
+  background: var(--mastery-high);
 }
 
 .mastery-bar-fill.mastery-mid {
-  background: #f59e0b;
+  background: var(--mastery-mid);
 }
 
 .mastery-bar-fill.mastery-low {
-  background: #ef4444;
+  background: var(--mastery-low);
 }
 
 .topic-mastery-list {
@@ -2912,7 +2921,8 @@ label {
 /* ─── Retention Alerts & Forgetting ────────────────────────────────────── */
 
 .review-alerts {
-  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+  border: 1px solid rgba(245, 158, 11, 0.18);
 }
 
 .review-alert-group {
@@ -2941,7 +2951,7 @@ label {
 }
 
 .review-alert-desc {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--muted);
   margin: 0 0 0.6rem;
 }
@@ -2965,6 +2975,7 @@ label {
 
 .review-topic-chip:hover {
   transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .review-topic-chip.overdue {
@@ -3010,15 +3021,18 @@ label {
 
 /* Topic item states */
 .topic-mastery-item.overdue {
-  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 .topic-mastery-item.fragile {
-  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+  border-color: rgba(245, 158, 11, 0.2);
 }
 
 .topic-mastery-item.strong {
-  border-left: 3px solid #10b981;
+  background: rgba(16, 185, 129, 0.04);
+  border-color: rgba(16, 185, 129, 0.2);
 }
 
 /* Stability indicator */
@@ -3027,7 +3041,7 @@ label {
 }
 
 .stability-fragile {
-  color: #f59e0b;
+  color: var(--mastery-mid);
 }
 
 .stability-moderate {
@@ -3035,7 +3049,7 @@ label {
 }
 
 .stability-strong {
-  color: #10b981;
+  color: var(--mastery-high);
 }
 
 /* Recency */
@@ -3044,7 +3058,7 @@ label {
 }
 
 .recency-stale {
-  color: #f59e0b;
+  color: var(--mastery-mid);
   font-weight: 600;
 }
 
@@ -3054,7 +3068,7 @@ label {
 }
 
 .review-overdue {
-  color: #ef4444;
+  color: var(--mastery-low);
   font-weight: 700;
 }
 
@@ -4613,4 +4627,99 @@ textarea:focus {
 .danger-action {
   border-color: rgba(220, 38, 38, 0.24);
   color: var(--danger);
+}
+
+/* ─── Focus Visible ──────────────────────────────────────────────────────── */
+
+.metric-card:focus-visible,
+.mastery-table-row:focus-visible,
+.review-topic-chip:focus-visible,
+.topic-mastery-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-card,
+  .course-card,
+  .review-topic-chip,
+  .mastery-table-row,
+  .topic-mastery-item,
+  .attempt-list article {
+    transition: none;
+  }
+
+  .metric-card:hover,
+  .course-card:hover,
+  .review-topic-chip:hover,
+  .attempt-list article:hover {
+    transform: none;
+  }
+
+  .metric-card:active,
+  .course-card:active {
+    transform: none;
+  }
+
+  .mastery-bar-fill {
+    transition: none;
+  }
+
+  .topic-mastery-item {
+    animation: none;
+  }
+}
+
+/* ─── Topic Mastery Stagger ──────────────────────────────────────────────── */
+
+.topic-mastery-list .topic-mastery-item {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: topic-fade-in 280ms var(--ease-out) forwards;
+}
+
+.topic-mastery-list .topic-mastery-item:nth-child(1) { animation-delay: 0ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(2) { animation-delay: 35ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(3) { animation-delay: 70ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(4) { animation-delay: 105ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(5) { animation-delay: 140ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(6) { animation-delay: 175ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(7) { animation-delay: 210ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(8) { animation-delay: 245ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(9) { animation-delay: 280ms; }
+.topic-mastery-list .topic-mastery-item:nth-child(10) { animation-delay: 315ms; }
+
+@keyframes topic-fade-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Section Spacing Variation ──────────────────────────────────────────── */
+
+.page-stack > .section-card:has(.mastery-summary-row) {
+  margin-bottom: -0.3rem;
+}
+
+.page-stack > .section-card:has(.review-alerts) {
+  margin-top: 0.2rem;
+}
+
+.page-stack > .section-card:has(.attempt-list) {
+  margin-top: 0.3rem;
+}
+
+/* ─── Metric Card First-Child Emphasis ───────────────────────────────────── */
+
+.metrics-grid .metric-card:first-child strong {
+  font-size: 2.25rem;
+}
+
+@media (max-width: 640px) {
+  .metrics-grid .metric-card:first-child strong {
+    font-size: 1.75rem;
+  }
 }
