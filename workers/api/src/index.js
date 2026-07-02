@@ -770,13 +770,13 @@ export default {
         const params = [];
 
         if (dept) {
-          whereClauses.push('department_code = ?');
-          params.push(dept.toUpperCase());
+          whereClauses.push('department LIKE ?');
+          params.push(`%${dept}%`);
         }
         if (q) {
-          whereClauses.push('(code LIKE ? OR title LIKE ?)');
+          whereClauses.push('title LIKE ?');
           const like = `%${q}%`;
-          params.push(like, like);
+          params.push(like);
         }
         if (lvl) {
           whereClauses.push('levels LIKE ?');
@@ -831,7 +831,7 @@ export default {
       }
 
       if (segments[0] === 'departments' && segments.length === 3 && segments[2] === 'courses') {
-        const deptCode = segments[1].toUpperCase();
+        const deptName = decodeURIComponent(segments[1]);
         const url = new URL(request.url);
         const q = url.searchParams.get('q') || '';
         let limit = parseInt(url.searchParams.get('limit') || '20');
@@ -841,13 +841,13 @@ export default {
         let cursor = parseInt(url.searchParams.get('cursor') || '0');
         if (isNaN(cursor) || cursor < 0) cursor = 0;
 
-        let whereClause = 'WHERE department_code = ?';
-        const params = [deptCode];
+        let whereClause = 'WHERE department LIKE ?';
+        const params = [`%${deptName}%`];
 
         if (q) {
-          whereClause += ' AND (code LIKE ? OR title LIKE ?)';
+          whereClause += ' AND title LIKE ?';
           const like = `%${q}%`;
-          params.push(like, like);
+          params.push(like);
         }
 
         const countRow = await db.prepare(
