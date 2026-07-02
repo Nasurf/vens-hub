@@ -107,6 +107,63 @@ class _FloatingNavBar extends StatelessWidget {
   }
 }
 
+class _BouncyScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _BouncyScale({
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  State<_BouncyScale> createState() => _BouncyScaleState();
+}
+
+class _BouncyScaleState extends State<_BouncyScale> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.92).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.elasticOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      behavior: HitTestBehavior.opaque,
+      child: ScaleTransition(
+        scale: _scale,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final int index;
@@ -126,9 +183,8 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSelected = selectedIndex == index;
 
-    return GestureDetector(
+    return _BouncyScale(
       onTap: () => onTap(index),
-      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
@@ -168,9 +224,8 @@ class _HubNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSelected = selectedIndex == index;
 
-    return GestureDetector(
+    return _BouncyScale(
       onTap: () => onTap(index),
-      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
@@ -205,9 +260,8 @@ class _ProfileNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSelected = selectedIndex == index;
 
-    return GestureDetector(
+    return _BouncyScale(
       onTap: () => onTap(index),
-      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
@@ -218,13 +272,12 @@ class _ProfileNavItem extends StatelessWidget {
                   ? colorScheme.primaryContainer.withValues(alpha: 0.8)
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border:
-              isSelected
-                  ? Border.all(
-                    color: colorScheme.primary.withValues(alpha: 0.3),
-                    width: 1.5,
-                  )
-                  : null,
+          border: Border.all(
+            color: isSelected
+                ? colorScheme.primary.withValues(alpha: 0.3)
+                : Colors.transparent,
+            width: 1.5,
+          ),
         ),
         child: ProfileAvatarMenu(
           radius: 14,
