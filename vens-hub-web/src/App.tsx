@@ -12,6 +12,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronDown,
   ChevronRight,
   CircleUserRound,
@@ -41,6 +42,7 @@ import {
   TimerReset,
   Trash2,
   Trophy,
+  MapPin,
   UploadCloud,
   User,
   X,
@@ -658,8 +660,15 @@ function formatBytes(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function dateToIso(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return dateToIso(new Date())
 }
 
 function Logo({ compact = false }: { compact?: boolean }) {
@@ -2406,12 +2415,42 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
 function SchedulePage() {
   const [events, setEvents] = useStoredList<EventItem>(EVENTS_KEY, [])
   const [form, setForm] = useState({ title: '', course: '', date: todayIso(), start: '09:00', end: '10:00', venue: '' })
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const [year, month] = todayIso().split('-').map(Number)
+    return new Date(year, month - 1, 1)
+  })
+  const selectedDate = new Date(`${form.date}T00:00:00`)
   const todaysEvents = events.filter((event) => event.date === form.date).sort((a, b) => a.start.localeCompare(b.start))
+  const eventsByDate = useMemo(() => events.reduce<Record<string, EventItem[]>>((dates, item) => {
+    dates[item.date] = [...(dates[item.date] ?? []), item]
+    return dates
+  }, {}), [events])
+  const calendarDays = useMemo(() => {
+    const year = visibleMonth.getFullYear()
+    const month = visibleMonth.getMonth()
+    const firstDay = new Date(year, month, 1).getDay()
+    const totalDays = new Date(year, month + 1, 0).getDate()
+    return [
+      ...Array.from({ length: firstDay }, () => null),
+      ...Array.from({ length: totalDays }, (_, index) => new Date(year, month, index + 1)),
+    ]
+  }, [visibleMonth])
+  const selectedDateLabel = selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+  const isEndBeforeStart = form.end <= form.start
+  const canAddEvent = form.title.trim().length > 0 && !isEndBeforeStart
+
+  function selectDate(date: Date) {
+    setForm((value) => ({ ...value, date: dateToIso(date) }))
+  }
+
+  function changeMonth(offset: number) {
+    setVisibleMonth((value) => new Date(value.getFullYear(), value.getMonth() + offset, 1))
+  }
 
   function addEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!form.title.trim()) return
-    setEvents([{ id: crypto.randomUUID(), ...form, title: form.title.trim() }, ...events])
+    if (!canAddEvent) return
+    setEvents([{ id: crypto.randomUUID(), ...form, title: form.title.trim(), course: form.course.trim(), venue: form.venue.trim() }, ...events])
     setForm((value) => ({ ...value, title: '', course: '', venue: '' }))
   }
 
@@ -2421,63 +2460,112 @@ function SchedulePage() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Planner" title="Schedule" />
-      <section className="planner-grid">
-        <form className="section-card event-form" onSubmit={addEvent}>
-          <h2>Add Event</h2>
-          <label>
-            Event title
-            <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Power Systems lecture" />
-          </label>
-          <label>
-            Course
-            <input value={form.course} onChange={(event) => setForm({ ...form, course: event.target.value })} placeholder="EEE 401" />
-          </label>
-          <div className="three-col">
-            <label>
-              Date
-              <input value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} type="date" />
-            </label>
-            <label>
-              Start
-              <input value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} type="time" />
-            </label>
-            <label>
-              End
-              <input value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} type="time" />
-            </label>
-          </div>
-          <label>
-            Venue
-            <input value={form.venue} onChange={(event) => setForm({ ...form, venue: event.target.value })} placeholder="Engineering block" />
-          </label>
-          <button className="primary-button full" type="submit"><Plus size={18} /> Add Event</button>
-        </form>
-        <section className="section-card agenda-card">
-          <div className="section-title">
+      <PageHeader eyebrow="Planner" title="Schedule">
+        <button className="ghost-button" onClick={() => selectDate(new Date())} type="button">Today</button>
+      </PageHeader>
+      <section className="schedule-shell">
+        <div className="section-card calendar-card">
+          <div className="calendar-toolbar">
             <div>
-              <p className="eyebrow">Agenda</p>
-              <h2>{new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
+              <p className="eyebrow">Calendar</p>
+              <h2>{visibleMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
             </div>
-            <span className="score-chip">{todaysEvents.length} events</span>
+            <div className="calendar-nav">
+              <button aria-label="Previous month" onClick={() => changeMonth(-1)} type="button"><ChevronLeft size={18} /></button>
+              <button aria-label="Next month" onClick={() => changeMonth(1)} type="button"><ChevronRight size={18} /></button>
+            </div>
           </div>
-          {todaysEvents.length === 0 ? (
-            <EmptyState icon={<CalendarDays />} title="No events for this date" body="Add lectures, study sessions or assignment deadlines." />
-          ) : (
-            <div className="timeline-list">
-              {todaysEvents.map((item) => (
-                <article key={item.id}>
-                  <time>{item.start} - {item.end}</time>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.course || 'Personal event'} {item.venue ? `at ${item.venue}` : ''}</p>
-                  </div>
-                  <button onClick={() => removeEvent(item.id)}><X size={16} /></button>
-                </article>
-              ))}
+          <div className="calendar-weekdays" aria-hidden="true">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <span key={day}>{day}</span>)}
+          </div>
+          <div className="calendar-grid">
+            {calendarDays.map((date, index) => {
+              if (!date) return <span className="calendar-empty" key={`empty-${index}`} />
+              const iso = dateToIso(date)
+              const dayEvents = eventsByDate[iso] ?? []
+              const isSelected = iso === form.date
+              const isToday = iso === todayIso()
+              return (
+                <button
+                  className={cx('calendar-day', isSelected && 'selected', isToday && 'today')}
+                  key={iso}
+                  onClick={() => selectDate(date)}
+                  type="button"
+                >
+                  <span>{date.getDate()}</span>
+                  {dayEvents.length > 0 && <small>{dayEvents.length}</small>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="planner-grid">
+          <form className="section-card event-form polished-event-form" onSubmit={addEvent}>
+            <div className="event-form-heading">
+              <div>
+                <p className="eyebrow">New calendar item</p>
+                <h2>Add to {selectedDateLabel}</h2>
+              </div>
+              <span className="score-chip">{todaysEvents.length} on this day</span>
             </div>
-          )}
-        </section>
+            <label>
+              Event title
+              <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Power Systems lecture" required />
+            </label>
+            <div className="two-col">
+              <label>
+                Course or label
+                <input value={form.course} onChange={(event) => setForm({ ...form, course: event.target.value })} placeholder="EEE 401" />
+              </label>
+              <label>
+                Venue
+                <input value={form.venue} onChange={(event) => setForm({ ...form, venue: event.target.value })} placeholder="Engineering block" />
+              </label>
+            </div>
+            <div className="three-col schedule-time-fields">
+              <label>
+                Date
+                <input value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} type="date" />
+              </label>
+              <label>
+                Start
+                <input value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} type="time" />
+              </label>
+              <label>
+                End
+                <input value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} type="time" />
+              </label>
+            </div>
+            {isEndBeforeStart && <p className="form-error">End time must be later than the start time.</p>}
+            <button className="primary-button full" disabled={!canAddEvent} type="submit"><Plus size={18} /> Add to calendar</button>
+          </form>
+          <section className="section-card agenda-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Agenda</p>
+                <h2>{selectedDateLabel}</h2>
+              </div>
+              <span className="score-chip">{todaysEvents.length} events</span>
+            </div>
+            {todaysEvents.length === 0 ? (
+              <EmptyState icon={<CalendarDays />} title="No events for this date" body="Select a date on the calendar and add lectures, study sessions or assignment deadlines." />
+            ) : (
+              <div className="timeline-list">
+                {todaysEvents.map((item) => (
+                  <article key={item.id}>
+                    <time>{item.start} - {item.end}</time>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p>{item.course || 'Personal event'} {item.venue ? <><MapPin size={14} /> {item.venue}</> : ''}</p>
+                    </div>
+                    <button aria-label={`Remove ${item.title}`} onClick={() => removeEvent(item.id)} type="button"><X size={16} /></button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </section>
     </div>
   )
