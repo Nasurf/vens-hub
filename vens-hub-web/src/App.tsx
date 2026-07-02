@@ -49,6 +49,14 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
+import {
+  onAuthChange,
+  loginWithEmail,
+  registerWithEmail,
+  loginWithGoogle,
+  signOutUser,
+  getUserIdHeader,
+} from './firebase'
 
 type Department = {
   name: string
@@ -144,9 +152,13 @@ type AsyncState<T> = {
 }
 
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ?? 'https://vens-hub-api.nasurf25.workers.dev'
-const UPLOAD_API_BASE = import.meta.env.VITE_UPLOAD_API_BASE_URL ?? API_BASE
-const ASSISTANT_API_BASE = import.meta.env.VITE_ASSISTANT_API_BASE_URL ?? API_BASE
+  import.meta.env.VITE_API_BASE_URL
+const UPLOAD_API_BASE = import.meta.env.VITE_UPLOAD_API_BASE_URL
+const ASSISTANT_API_BASE = import.meta.env.VITE_ASSISTANT_API_BASE_URL
+
+if (!API_BASE) {
+  throw new Error('VITE_API_BASE_URL is required — copy env.example to .env.local and set it')
+}
 
 const PROFILE_KEY = 'vens-hub-web-profile'
 const EVENTS_KEY = 'vens-hub-web-events'
@@ -217,6 +229,15 @@ function useProfile() {
     }
   }, [])
   return profile
+}
+
+function useFirebaseUser() {
+  const [user, setUser] = useState<import('firebase/auth').User | null | 'loading'>('loading')
+  useEffect(() => {
+    const unsub = onAuthChange((u) => setUser(u))
+    return unsub
+  }, [])
+  return user
 }
 
 function useStoredList<T>(key: string, fallback: T[]) {
@@ -789,6 +810,8 @@ function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const selectedDepartment = departments.find((department) => department.code === departmentCode)
   const canContinue =
@@ -797,22 +820,65 @@ function RegisterPage() {
     (step === 2 && departmentCode) ||
     (step === 3 && email.includes('@') && password.length >= 6 && password === confirmPassword)
 
-  function next() {
+  async function next() {
     if (!canContinue) return
     if (step < 3) {
       setStep((value) => value + 1)
       return
     }
-    if (!selectedDepartment) return
-    saveProfile({
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email.trim(),
-      level,
-      departmentCode: selectedDepartment.code,
-      departmentName: selectedDepartment.name,
-    })
-    navigate('/app')
+    // Step 3 — create Firebase account
+    setError('')
+    setLoading(true)
+    try {
+      await registerWithEmail(email, password)
+      if (!selectedDepartment) return
+      saveProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        level,
+        departmentCode: selectedDepartment.code,
+        departmentName: selectedDepartment.name,
+      })
+      navigate('/app')
+    } catch (err: any) {
+      const code = err?.code || ''
+      if (code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists. Sign in instead.')
+      } else if (code === 'auth/weak-password') {
+        setError('Password is too weak. Use at least 6 characters.')
+      } else if (code === 'auth/invalid-email') {
+        setError('Enter a valid email address.')
+      } else {
+        setError(err?.message || 'Account creation failed. Try again.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleGoogleSignUp() {
+    setError('')
+    setLoading(true)
+    try {
+      const user = await loginWithGoogle()
+      if (!selectedDepartment) return
+      saveProfile({
+        firstName: user.displayName?.split(' ')[0] || firstName.trim() || 'User',
+        lastName: user.displayName?.split(' ').slice(1).join(' ') || lastName.trim() || '',
+        email: user.email || email.trim(),
+        level,
+        departmentCode: selectedDepartment.code,
+        departmentName: selectedDepartment.name,
+      })
+      navigate('/app')
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setError(err?.message || 'Google sign up failed.')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -877,26 +943,35 @@ function RegisterPage() {
             <StepPanel icon={<Lock />} title="Last step, set up your login.">
               <label>
                 Email address
-                <input value={email} onChange={(event) => setEmail(event.target.value)} />
+                <input value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />
               </label>
               <label>
                 Create password
-                <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
+                <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" disabled={loading} />
               </label>
               <label>
                 Confirm password
-                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" />
+                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" disabled={loading} />
               </label>
+              {error && <p className="form-error">{error}</p>}
             </StepPanel>
           )}
           <div className="signup-actions">
-            <button className="ghost-button" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
+            <button className="ghost-button" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>
               Back
             </button>
-            <button className="primary-button" disabled={!canContinue} onClick={next}>
-              {step === 3 ? 'Create Account' : 'Continue'}
+            <button className="primary-button" disabled={!canContinue || loading} onClick={next}>
+              {loading ? 'Creating account...' : step === 3 ? 'Create Account' : 'Continue'}
             </button>
           </div>
+          {step === 3 && (
+            <div className="auth-divider"><span>or</span></div>
+          )}
+          {step === 3 && (
+            <button className="google-button full" type="button" onClick={handleGoogleSignUp} disabled={loading}>
+              Sign up with Google
+            </button>
+          )}
         </div>
       </section>
     </PublicShell>
@@ -951,9 +1026,16 @@ function demoProfile(email: string): Profile {
 }
 
 function RequireAuth() {
+  const firebaseUser = useFirebaseUser()
   const profile = useProfile()
   const location = useLocation()
-  if (!profile) return <Navigate to="/welcome" replace state={{ from: location.pathname }} />
+
+  if (firebaseUser === 'loading') {
+    return <div className="page-stack narrow"><div className="loading-spinner" /></div>
+  }
+  if (!firebaseUser) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  // Still need profile for user metadata — redirect to register if missing
+  if (!profile) return <Navigate to="/register" replace state={{ from: location.pathname }} />
   return <Outlet />
 }
 
@@ -972,6 +1054,7 @@ function AppShell() {
   ]
 
   function signOut() {
+    signOutUser()
     saveProfile(null)
     navigate('/welcome')
   }
