@@ -7,8 +7,8 @@ import { applyBktUpdate, DEFAULT_PARAMS } from './bkt.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id, x-vens-upload-expires, x-vens-upload-signature, x-vens-upload-size',
 };
 
 function json(data, status = 200) {
@@ -32,6 +32,180 @@ function getUserId(request, body) {
   return null;
 }
 
+const textEncoder = new TextEncoder();
+
+function getUploadBucket(env) {
+  return env.STUDY_MATERIALS_BUCKET || env.MATERIALS_BUCKET || env.R2_BUCKET || null;
+}
+
+function safeFilename(name = 'document') {
+  const cleaned = String(name).trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_');
+  return cleaned || 'document';
+}
+
+function safeObjectKey(key) {
+  const cleaned = String(key || '')
+    .split('/')
+    .map((part) => safeFilename(part))
+    .filter(Boolean)
+    .join('/');
+  if (!cleaned || cleaned.includes('..')) return null;
+  return cleaned.startsWith('users/') ? cleaned : `users/demo/${cleaned}`;
+}
+
+function publicUrlFor(env, objectKey) {
+  const base = (env.R2_PUBLIC_DOMAIN || env.R2_PUBLIC_URL || 'https://files.nuesaabuad.ng').replace(/\/$/, '');
+  return `${base}/${objectKey.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+async function hmacHex(secret, payload) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, textEncoder.encode(payload));
+  return [...new Uint8Array(signature)].map((value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function signaturePayload({ objectKey, expires, contentType, sizeBytes }) {
+  return `${objectKey}.${expires}.${contentType}.${sizeBytes || 0}`;
+}
+
+async function signUpload(env, payload) {
+  const secret = env.UPLOAD_SIGNING_SECRET || env.R2_UPLOAD_SECRET;
+  if (!secret) return null;
+  return hmacHex(secret, payload);
+}
+
+async function handleUploadPresign(request, env, origin) {
+  const bucket = getUploadBucket(env);
+  if (!bucket) return error('R2 bucket binding STUDY_MATERIALS_BUCKET is not configured', 501);
+  if (!env.UPLOAD_SIGNING_SECRET && !env.R2_UPLOAD_SECRET) {
+    return error('UPLOAD_SIGNING_SECRET is not configured', 501);
+  }
+
+  const body = await request.json();
+  const filename = safeFilename(body.filename || 'document.pdf');
+  const contentType = body.content_type || body.contentType || 'application/octet-stream';
+  const sizeBytes = Number(body.size_bytes || body.sizeBytes || 0);
+  const objectKey = safeObjectKey(body.object_key || body.objectKey || `users/demo/uploads/${Date.now()}-${filename}`);
+  if (!objectKey) return error('Invalid object_key');
+  if (!Number.isFinite(sizeBytes) || sizeBytes < 0) return error('Invalid size_bytes');
+
+  const expires = String(Date.now() + 10 * 60 * 1000);
+  const payload = signaturePayload({ objectKey, expires, contentType, sizeBytes });
+  const signature = await signUpload(env, payload);
+  if (!signature) return error('Upload signing is not configured', 501);
+
+  const uploadUrl = new URL('/uploads/direct', origin);
+  uploadUrl.searchParams.set('object_key', objectKey);
+  uploadUrl.searchParams.set('filename', filename);
+  uploadUrl.searchParams.set('content_type', contentType);
+  uploadUrl.searchParams.set('size_bytes', String(sizeBytes));
+
+  return json({
+    object_key: objectKey,
+    public_url: publicUrlFor(env, objectKey),
+    finalize_url: '/uploads/finalize',
+    upload: {
+      url: uploadUrl.toString(),
+      method: 'PUT',
+      headers: {
+        'x-vens-upload-expires': expires,
+        'x-vens-upload-signature': signature,
+      },
+    },
+  });
+}
+
+async function verifyUploadSignature(request, env, { objectKey, contentType, sizeBytes }) {
+  const expires = request.headers.get('x-vens-upload-expires') || '';
+  const provided = request.headers.get('x-vens-upload-signature') || '';
+  if (!expires || !provided) return false;
+  if (Number(expires) < Date.now()) return false;
+  const expected = await signUpload(env, signaturePayload({ objectKey, expires, contentType, sizeBytes }));
+  return Boolean(expected && expected === provided);
+}
+
+async function handleDirectUpload(request, env, url) {
+  const bucket = getUploadBucket(env);
+  if (!bucket) return error('R2 bucket binding STUDY_MATERIALS_BUCKET is not configured', 501);
+  const objectKey = safeObjectKey(url.searchParams.get('object_key'));
+  if (!objectKey) return error('Invalid object_key');
+  const filename = safeFilename(url.searchParams.get('filename') || objectKey.split('/').pop());
+  const contentType = request.headers.get('content-type') || url.searchParams.get('content_type') || 'application/octet-stream';
+  const sizeBytes = Number(url.searchParams.get('size_bytes') || request.headers.get('x-vens-upload-size') || 0);
+  const verified = await verifyUploadSignature(request, env, { objectKey, contentType, sizeBytes });
+  if (!verified) return error('Invalid or expired upload signature', 403);
+
+  const put = await bucket.put(objectKey, request.body, {
+    httpMetadata: {
+      contentType,
+      contentDisposition: `inline; filename="${filename}"`,
+    },
+    customMetadata: {
+      original_filename: filename,
+      uploaded_via: 'vens-hub-web',
+    },
+  });
+
+  return json({
+    object_key: objectKey,
+    public_url: publicUrlFor(env, objectKey),
+    etag: put?.etag,
+  });
+}
+
+async function handleUploadFinalize(request, env) {
+  const body = await request.json();
+  const objectKey = safeObjectKey(body.object_key || body.objectKey);
+  if (!objectKey) return error('Invalid object_key');
+  const bucket = getUploadBucket(env);
+  const head = bucket ? await bucket.head(objectKey) : null;
+  return json({
+    record: {
+      object_key: objectKey,
+      url: publicUrlFor(env, objectKey),
+      size_bytes: body.size_bytes || head?.size || null,
+      content_type: head?.httpMetadata?.contentType || null,
+      status: head ? 'uploaded' : 'metadata_only',
+      metadata: body.metadata || {},
+      created_at: new Date().toISOString(),
+    },
+  });
+}
+
+async function handleAssistant(request, env) {
+  const body = await request.json();
+  const question = String(body.question || '').trim();
+  const context = String(body.context || '').trim();
+  if (!question) return error('question is required');
+  if (!env.GEMINI_API_KEY) return error('GEMINI_API_KEY is not configured', 501);
+
+  const model = env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
+  const prompt = `${context ? `Context: ${context}\n\n` : ''}Question: ${question}\n\nPlease provide a helpful, clear answer. Explain concepts clearly, use examples when helpful, format mathematical expressions plainly, and be concise but thorough.`;
+  const geminiResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+    }),
+  });
+
+  if (!geminiResp.ok) {
+    const detail = await geminiResp.text();
+    return error(`Gemini request failed: ${detail}`, geminiResp.status);
+  }
+
+  const data = await geminiResp.json();
+  const answer = data.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('\n').trim();
+  return json({ answer: answer || 'No answer was returned by Gemini.' });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -44,6 +218,24 @@ export default {
     const db = env.QUESTIONS_DB;
 
     try {
+      // ── Study materials: signed Worker/R2 upload flow ─────────────
+      if (path === '/uploads/presign' && request.method === 'POST') {
+        return handleUploadPresign(request, env, url.origin);
+      }
+
+      if (path === '/uploads/direct' && request.method === 'PUT') {
+        return handleDirectUpload(request, env, url);
+      }
+
+      if (path === '/uploads/finalize' && request.method === 'POST') {
+        return handleUploadFinalize(request, env);
+      }
+
+      // ── AI assistant: Gemini-backed study helper ─────────────────
+      if (path === '/assistant' && request.method === 'POST') {
+        return handleAssistant(request, env);
+      }
+
       // ── Adaptive: Submit answer (stateless BKT + persistence) ─────────
       if (path === '/adaptive/submit-answer' && request.method === 'POST') {
         const body = await request.json();

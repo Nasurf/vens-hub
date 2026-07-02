@@ -59,6 +59,38 @@ GET /questions/:courseCode
 Example: `/courses/AAE%20101/questions`
 Returns array of question objects with topic, options, correct answer, explanation.
 
+### Study material signed upload flow
+
+```
+POST /uploads/presign
+PUT  /uploads/direct?object_key=...
+POST /uploads/finalize
+```
+
+The React web migration calls `/uploads/presign`, uploads the file bytes to the returned `upload.url`, then calls `/uploads/finalize` for the metadata record. The Worker stores bytes in the `STUDY_MATERIALS_BUCKET` R2 binding and returns public URLs using `R2_PUBLIC_DOMAIN`.
+
+Required Worker configuration:
+
+```bash
+wrangler secret put UPLOAD_SIGNING_SECRET
+# optional, only if the assistant is enabled
+wrangler secret put GEMINI_API_KEY
+```
+
+### AI assistant
+
+```
+POST /assistant
+```
+
+Request:
+
+```json
+{ "question": "Explain lift", "context": "AAE 101 quiz" }
+```
+
+The endpoint uses `GEMINI_API_KEY` and `GEMINI_MODEL` to call Gemini and returns `{ "answer": "..." }`. If the secret is not configured, the endpoint returns a clear 501 error so the web client can fall back safely.
+
 ---
 
 ## Adaptive endpoints (stateless BKT)
