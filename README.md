@@ -29,10 +29,7 @@ Flutter ─┘              │
 
 ### Environment
 
-```env
-# assets/.env
-API_BASE_URL=https://vens-hub-api.nasurf25.workers.dev
-```
+Copy `assets/.env.example` to `assets/.env` and fill in the values.
 
 ### Flutter
 
