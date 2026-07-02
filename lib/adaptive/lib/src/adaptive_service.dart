@@ -1,9 +1,13 @@
-/// Adaptive Engine — Callable Function Service
+/// Adaptive Engine — HTTP Client Service
 ///
-/// V2.5: No local BKT computation. Server is authoritative.
-/// Client locks UI + shows "Checking..." while waiting.
+/// V2.5: No local BKT computation. Sends submission to Cloudflare Worker.
+/// Worker is authoritative for correctness checking and BKT state update.
+/// Client stores the returned KC state locally via get_storage.
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'adaptive_types.dart';
+import 'package:vens_hub/core/config/environment_config.dart';
 
 /// Result of a submission attempt.
 sealed class SubmitResult {
@@ -16,7 +20,7 @@ class SubmitApplied extends SubmitResult {
   const SubmitApplied(this.result);
 }
 
-/// Duplicate attempt — server returned cached result.
+/// Duplicate attempt — same result returned.
 class SubmitDuplicate extends SubmitResult {
   final SubmitAnswerResult result;
   const SubmitDuplicate(this.result);
@@ -29,38 +33,55 @@ class SubmitError extends SubmitResult {
   const SubmitError(this.message, [this.originalError]);
 }
 
-/// Service that wraps Firebase callable functions for the adaptive engine.
+/// Service that wraps HTTP calls to the Cloudflare Worker adaptive endpoints.
 ///
 /// Usage:
 /// ```dart
 /// final service = AdaptiveService();
-/// final result = await service.submitAnswer(input);
+/// final result = await service.submitAnswer(input, currentKcState);
 /// result.when(
 ///   applied: (r) => _handleResult(r),
-///   duplicate: (r) => _handleResult(r), // same shape
+///   duplicate: (r) => _handleResult(r),
 ///   error: (e) => _showError(e),
 /// );
 /// ```
 class AdaptiveService {
-  /// The callable function name in Firebase Functions.
-  static const String _submitAnswerFn = 'submitAnswer';
-  static const String _getStateFn = 'getAdaptiveState';
-  static const String _getReviewsFn = 'getPendingReviews';
+  final String _baseUrl;
 
-  /// Injected callable function caller.
-  /// Expected signature: (String name, Map<String, dynamic> args) async -> Map<String, dynamic>
-  final Future<Map<String, dynamic>> Function(String name, Map<String, dynamic> args) _callFunction;
+  AdaptiveService({String? baseUrl})
+      : _baseUrl = baseUrl ?? EnvironmentConfig.apiBaseUrl;
 
-  const AdaptiveService({
-    required Future<Map<String, dynamic>> Function(String name, Map<String, dynamic> args) callFunction,
-  }) : _callFunction = callFunction;
-
-  /// Submit an answer to the server.
-  /// Returns [SubmitApplied] on success, [SubmitDuplicate] on dedup, [SubmitError] on failure.
-  Future<SubmitResult> submitAnswer(SubmitAnswerInput input) async {
+  /// Submit an answer to the adaptive engine.
+  ///
+  /// [input] — the answer details.
+  /// [kcState] — the current KC state for this topic (null on first attempt).
+  /// Returns [SubmitApplied] on success, [SubmitDuplicate] on dedup,
+  /// [SubmitError] on failure.
+  Future<SubmitResult> submitAnswer(
+    SubmitAnswerInput input, [
+    Map<String, dynamic>? kcState,
+  ]) async {
     try {
-      final response = await _callFunction(_submitAnswerFn, input.toJson());
-      final result = SubmitAnswerResult.fromJson(response);
+      final uri = Uri.parse('$_baseUrl/adaptive/submit-answer');
+      final body = {
+        ...input.toJson(),
+        if (kcState != null) 'kcState': kcState,
+      };
+
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode != 200) {
+        final err = _tryParseError(response.body);
+        return SubmitError(err);
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final result = SubmitAnswerResult.fromJson(data);
+
       if (result.status == 'duplicate') {
         return SubmitDuplicate(result);
       }
@@ -70,26 +91,36 @@ class AdaptiveService {
     }
   }
 
-  /// Fetch the full adaptive state document for the current user.
-  Future<AdaptiveStateDoc?> getState() async {
+  /// Get course-level mastery aggregation from the server.
+  /// [kcStates] — the full local KC state map.
+  Future<Map<String, dynamic>> getState(
+    Map<String, Map<String, dynamic>> kcStates,
+  ) async {
     try {
-      final response = await _callFunction(_getStateFn, {});
-      return AdaptiveStateDoc.fromJson(response);
+      final uri = Uri.parse('$_baseUrl/adaptive/state');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'kcStates': kcStates}),
+      );
+
+      if (response.statusCode != 200) {
+        return {};
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data;
     } catch (_) {
-      return null;
+      return {};
     }
   }
 
-  /// Fetch pending reviews that are due now.
-  Future<List<PendingReview>> getPendingReviews() async {
+  String _tryParseError(String body) {
     try {
-      final response = await _callFunction(_getReviewsFn, {});
-      final list = (response['pending'] as List<dynamic>?) ?? [];
-      return list
-          .map((e) => PendingReview.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final data = jsonDecode(body);
+      return data['error']?.toString() ?? 'Unknown server error';
     } catch (_) {
-      return [];
+      return 'Server error (${body.length > 100 ? body.substring(0, 100) : body})';
     }
   }
 }
