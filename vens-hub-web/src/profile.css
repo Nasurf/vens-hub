@@ -45,7 +45,10 @@
 :root[data-theme="dark"] .profile-hero {
   background: rgba(255, 255, 255, 0.03);
 }
-:root[data-theme="dark"] .profile-avatar-inner { background: #111111; }
+:root[data-theme="dark"] .profile-avatar-inner { 
+  background: #111111; 
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+}
 :root[data-theme="dark"] .profile-course-item { border-color: var(--line); }
 :root[data-theme="dark"] .profile-course-item:hover { background: rgba(15, 155, 142, 0.08); }
 :root[data-theme="dark"] .profile-badge { background: var(--primary-soft); }
@@ -65,29 +68,16 @@
   text-align: center;
   padding: 3rem 2rem 2.5rem;
   margin-bottom: 1.5rem;
-  background: linear-gradient(135deg, var(--primary-soft), transparent 70%);
+  background: var(--primary-soft);
   border-radius: 24px;
   position: relative;
   overflow: hidden;
-}
-.profile-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 0%, var(--primary), transparent 70%);
-  opacity: 0.06;
-  pointer-events: none;
 }
 
 .profile-avatar-wrap {
   position: relative;
   display: inline-flex;
   margin-bottom: 1.25rem;
-}
-.profile-avatar-gradient {
-  padding: 3px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), #43d4c5);
 }
 .profile-avatar-inner {
   width: 96px;
@@ -100,6 +90,7 @@
   font-weight: 800;
   color: var(--primary);
   line-height: 1;
+  border: 3px solid color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .profile-hero h1 {
