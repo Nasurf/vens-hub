@@ -1,1 +1,1 @@
-It is basically  engineering hub for a hackathon
+It is basically engineering hub for a hackathon
