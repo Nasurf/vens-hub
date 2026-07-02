@@ -1,0 +1,13 @@
+name = "vens-hub-api"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "QUESTIONS_DB"
+database_name = "vens-hub-questions"
+database_id = "c9949c3a-09a9-4b43-b39f-b15e30c38b99"
+
+# Account ID (for deployment)
+[env.production]
+account_id = "a06481b3ed7ddcf617cc917bf38d39d4"
