@@ -917,8 +917,11 @@ function CourseEmbarkCard({ course, questionCount }: { course: Course; questionC
 }
 
 function PublicShell({ children }: { children: ReactNode }) {
-  const profile = useProfile()
-  if (profile) return <Navigate to="/app" replace />
+  const firebaseUser = useFirebaseUser()
+  if (firebaseUser === 'loading') {
+    return <div className="page-stack narrow"><div className="loading-spinner" /></div>
+  }
+  if (firebaseUser) return <Navigate to="/app" replace />
   return <main className="public-shell">{children}</main>
 }
 
@@ -1049,12 +1052,12 @@ function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      if (hasFirebaseConfig) {
-        await loginWithEmail(email, password)
+      if (!hasFirebaseConfig) {
+        setError('Authentication is not configured. Please contact support.')
+        setLoading(false)
+        return
       }
-      const existing = getProfile()
-      const profile: Profile = existing?.email === email ? existing : demoProfile(email)
-      saveProfile(profile)
+      await loginWithEmail(email, password)
       navigate('/app')
     } catch (err: any) {
       const code = err?.code || ''
@@ -1078,7 +1081,17 @@ function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await loginWithGoogle()
+      const user = await loginWithGoogle()
+      // Build profile from Google account data
+      const profile: Profile = {
+        firstName: user.displayName?.split(' ')[0] || 'User',
+        lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+        email: user.email || '',
+        departmentCode: '',
+        departmentName: '',
+        selectedCourses: [],
+      }
+      saveProfile(profile)
       navigate('/app')
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user') {
@@ -1235,6 +1248,11 @@ function RegisterPage() {
     setLoading(true)
     try {
       if (!selectedDepartment) return
+      if (!hasFirebaseConfig) {
+        setError('Authentication is not configured. Please contact support.')
+        setLoading(false)
+        return
+      }
       const profileData = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -1244,16 +1262,12 @@ function RegisterPage() {
         selectedCourses,
       }
 
-      let uid = 'demo-user'
-      if (hasFirebaseConfig) {
-        const user = await registerWithEmail(email, password)
-        uid = user.uid
-      }
+      const user = await registerWithEmail(email, password)
 
       // Save to Worker (best-effort)
       fetch(`${API_BASE}/user/profile`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-Id': uid },
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': user.uid },
         body: JSON.stringify(profileData),
       }).catch(() => {})
 
