@@ -71,6 +71,7 @@
   --primary: #0f9b8e;
   --primary-dark: #08786f;
   --primary-soft: #ddf7f3;
+  --brand-gradient: linear-gradient(135deg, #7ef5e8 0%, #2dd4bf 35%, #0f9b8e 68%, #08786f 100%);
   --ink: #111827;
   --muted: #6b7280;
   --line: rgba(15, 118, 110, 0.16);
@@ -123,11 +124,12 @@
 
 html {
   min-height: 100%;
+  background: var(--surface);
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--surface);
 }
 
@@ -194,7 +196,7 @@ label {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .logo-lockup {
@@ -222,6 +224,16 @@ label {
 
 .logo-mark img {
   height: 42px;
+  width: 42px;
+}
+
+.brand-logo-mask {
+  background: var(--brand-gradient, linear-gradient(135deg, var(--primary), var(--primary-dark)));
+  background-size: 160% 160%;
+  display: block;
+  height: 42px;
+  mask: url('/brand/logo.svg') center / contain no-repeat;
+  -webkit-mask: url('/brand/logo.svg') center / contain no-repeat;
   width: 42px;
 }
 
@@ -1019,7 +1031,7 @@ label {
 .app-shell {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .sidebar {
@@ -1032,7 +1044,9 @@ label {
   padding: 1.4rem 0.9rem;
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 20;
 }
 
@@ -1113,6 +1127,7 @@ label {
 }
 
 .app-main {
+  min-width: 0;
   padding: clamp(1.25rem, 3vw, 2.5rem);
 }
 
@@ -1127,6 +1142,7 @@ label {
   gap: 1.4rem;
   margin: 0 auto;
   max-width: 1240px;
+  padding-bottom: clamp(2rem, 5vh, 4rem);
 }
 
 .page-stack.narrow {
@@ -1203,6 +1219,170 @@ label {
   max-height: 170px;
   opacity: 0.9;
   width: 200px;
+}
+
+.hub-hero-mark {
+  flex: none;
+  height: 180px;
+  mask-image: url('/brand/hub.svg');
+  -webkit-mask-image: url('/brand/hub.svg');
+  opacity: 0.92;
+  width: 180px;
+}
+
+.streak-dashboard-card,
+.course-journey-card,
+.course-embark-card,
+.streak-cta-card,
+.streak-calendar-card,
+.streak-hero-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(15, 155, 142, 0.14);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .streak-dashboard-card,
+[data-theme="dark"] .course-journey-card,
+[data-theme="dark"] .course-embark-card,
+[data-theme="dark"] .streak-cta-card,
+[data-theme="dark"] .streak-calendar-card,
+[data-theme="dark"] .streak-hero-card {
+  background: rgba(17, 17, 17, 0.86);
+  border-color: rgba(15, 155, 142, 0.2);
+}
+
+.streak-dashboard-card {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: clamp(1.2rem, 3vw, 1.7rem);
+}
+
+.streak-dashboard-card h2,
+.course-embark-card h2,
+.streak-cta-card h2,
+.streak-calendar-card h2 {
+  color: var(--ink);
+  line-height: 1.15;
+}
+
+.streak-dashboard-card p:not(.eyebrow),
+.streak-cta-card p {
+  color: var(--muted);
+  line-height: 1.55;
+  margin-top: 0.35rem;
+}
+
+.course-journey-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.course-journey-card {
+  align-items: center;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 132px;
+  padding: 1rem;
+  transition: transform 180ms var(--ease-out), border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .course-journey-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+  }
+}
+
+.course-journey-icon,
+.course-embark-icon,
+.streak-clock {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  border-radius: 16px;
+  color: var(--primary-dark);
+  display: grid;
+  height: 54px;
+  justify-items: center;
+  width: 54px;
+}
+
+[data-theme="dark"] .course-journey-icon,
+[data-theme="dark"] .course-embark-icon,
+[data-theme="dark"] .streak-clock {
+  color: var(--primary);
+}
+
+.course-journey-copy > span,
+.course-embark-card > div > span {
+  color: var(--primary-dark);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.course-journey-copy h3 {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.35;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.course-journey-tags,
+.course-embark-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.course-journey-tags small,
+.course-embark-tags small {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+}
+
+.course-journey-cta {
+  align-items: center;
+  color: var(--primary-dark);
+  display: flex;
+  font-weight: 900;
+  gap: 0.25rem;
+}
+
+.course-embark-card {
+  align-items: center;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: clamp(1.2rem, 3vw, 1.7rem);
+}
+
+.course-embark-icon {
+  border-radius: 20px;
+  height: 68px;
+  width: 68px;
+}
+
+.course-embark-card h2 {
+  font-size: clamp(1.25rem, 3vw, 1.8rem);
+  margin: 0.2rem 0;
+}
+
+.course-embark-tags {
+  grid-column: 1 / -1;
 }
 
 /* ─── Metric Cards ────────────────────────────────────────────────────────── */
@@ -3325,6 +3505,157 @@ textarea:focus {
   padding-inline: 1rem;
 }
 
+
+.streaks-page {
+  max-width: 900px;
+}
+
+.streak-tabs {
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 1.25rem;
+}
+
+.streak-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 0 0 0.75rem;
+}
+
+.streak-tabs button.active {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+}
+
+.streak-hero-card {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 230px;
+  overflow: hidden;
+  padding: clamp(1.5rem, 4vw, 2.4rem);
+  position: relative;
+}
+
+.streak-number-block {
+  align-items: center;
+  display: grid;
+  justify-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.streak-number-block span {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
+  border-radius: 12px;
+  color: var(--primary-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 0.38rem 0.72rem;
+}
+
+.streak-number-block strong {
+  color: var(--primary);
+  font-size: clamp(5.5rem, 24vw, 10rem);
+  letter-spacing: -0.08em;
+  line-height: 0.9;
+  margin-top: 0.5rem;
+}
+
+.streak-number-block p {
+  color: var(--primary-dark);
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  font-weight: 800;
+}
+
+.streak-fire {
+  color: var(--primary);
+  height: clamp(7rem, 28vw, 13rem);
+  margin-left: clamp(0.5rem, 4vw, 2rem);
+  opacity: 0.96;
+  width: clamp(7rem, 28vw, 13rem);
+}
+
+.streak-hero-card.needs-action .streak-number-block strong,
+.streak-hero-card.needs-action .streak-fire {
+  color: var(--muted);
+}
+
+.streak-cta-card {
+  align-items: center;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 1.25rem;
+}
+
+.streak-cta-card a {
+  color: var(--primary-dark);
+  display: inline-flex;
+  font-size: 1.02rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin-top: 0.65rem;
+}
+
+.streak-calendar-card {
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.streak-calendar-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.streak-day {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: grid;
+  gap: 0.25rem;
+  min-height: 86px;
+  padding: 0.65rem 0.35rem;
+  text-align: center;
+}
+
+.streak-day span,
+.streak-day small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.streak-day strong {
+  color: var(--ink);
+  font-size: 1.15rem;
+}
+
+.streak-day.completed {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 36%, transparent);
+}
+
+.streak-day.completed strong,
+.streak-day.completed small {
+  color: var(--primary-dark);
+}
+
+.streak-day.today {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+.streak-friends-card {
+  min-height: 360px;
+}
+
 @media (max-width: 1050px) {
   .landing-grid,
   .auth-layout,
@@ -3540,9 +3871,12 @@ textarea:focus {
 
   .sidebar {
     align-items: stretch;
+    background: var(--surface);
     box-shadow: 0 18px 80px rgba(0, 0, 0, 0.16);
+    gap: 1.25rem;
     left: 0;
     max-width: 320px;
+    padding-bottom: max(1.4rem, env(safe-area-inset-bottom));
     position: fixed;
     transform: translateX(-110%);
     transition: transform 180ms ease;
@@ -3566,11 +3900,15 @@ textarea:focus {
   }
 
   .menu-backdrop {
-    background: rgba(4, 47, 46, 0.36);
+    background: rgba(17, 24, 39, 0.28);
     border: 0;
     inset: 0;
     position: fixed;
     z-index: 10;
+  }
+
+  [data-theme="dark"] .menu-backdrop {
+    background: rgba(0, 0, 0, 0.48);
   }
 
   .nav-item,
@@ -3587,12 +3925,12 @@ textarea:focus {
 
   /* ─── app shell ─────────────────────────────────── */
   .app-main {
-    padding: 4.5rem 0 2rem;
+    padding: 4.5rem 0 max(6rem, env(safe-area-inset-bottom));
   }
 
   .page-stack {
     gap: 1.25rem;
-    padding: 0 1rem;
+    padding: 0 1rem 6.5rem;
   }
 
   /* page-header on mobile: keep row, shrink font */
@@ -3620,6 +3958,41 @@ textarea:focus {
   /* hide the hero-dashboard banner card entirely */
   .hero-dashboard {
     display: none !important;
+  }
+
+  .hub-hero-mark {
+    display: none;
+  }
+
+  .streak-dashboard-card,
+  .course-journey-card,
+  .course-embark-card,
+  .streak-cta-card {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .streak-dashboard-card {
+    flex-direction: column;
+  }
+
+  .course-journey-cta {
+    justify-content: flex-start;
+  }
+
+  .streak-calendar-grid {
+    gap: 0.45rem;
+  }
+
+  .streak-day {
+    border-radius: 12px;
+    min-height: 76px;
+    padding: 0.55rem 0.25rem;
+  }
+
+  .streak-day span,
+  .streak-day small {
+    font-size: 0.66rem;
   }
 
   .course-detail-hero,

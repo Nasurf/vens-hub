@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
@@ -51,6 +51,7 @@ import {
   MapPin,
   MoreVertical,
   UploadCloud,
+  Users,
   User,
   X,
 } from 'lucide-react'
@@ -75,7 +76,7 @@ import {
   signOutUser,
   hasFirebaseConfig,
 } from './firebase'
-import { hasLatexSyntax, LatexText } from './LatexText'
+import { LatexText } from './LatexText'
 import {
   submitBatchResults,
   getUserStats,
@@ -198,6 +199,7 @@ const PROFILE_KEY = 'vens-hub-web-profile'
 const EVENTS_KEY = 'vens-hub-web-events'
 const UPLOADS_KEY = 'vens-hub-web-uploads'
 const ATTEMPTS_KEY = 'vens-hub-web-quiz-attempts'
+const STREAK_WINDOW_DAYS = 28
 const THEME_KEY = 'vens-hub-web-theme'
 const SCHEME_KEY = 'vens-hub-web-scheme'
 
@@ -216,10 +218,10 @@ const departments: Department[] = [
 
 
 const featureHighlights = [
-  'Interactive quizzes backed by the live Vens Hub question API',
-  'Smart schedule for class planning and self-study blocks',
-  'Course workspace backed by the live Vens Hub question API',
-  'Progress hub for streaks, performance and subject focus',
+  'Practice with multiple choice, theory and gap-fill questions',
+  'Plan lectures, study blocks and assignment deadlines in one place',
+  'Explore a curated engineering course and question bank',
+  'Track streaks, performance and subject focus as you learn',
 ]
 
 function cx(...classes: Array<string | false | undefined>) {
@@ -574,10 +576,9 @@ async function uploadStudyFile(file: File, profile: Profile | null): Promise<Stu
 }
 
 function makeAssistantFallback(question: string, context?: string) {
-  const scoped = context ? `
-
-Context I used: ${context}` : ''
-  return `The AI endpoint is not deployed/configured yet, but the assistant shell is working. For now, use this as the study prompt: ${question}.${scoped}`
+  void question
+  void context
+  return 'The study helper is unavailable right now. Please try again in a moment.'
 }
 
 async function askAssistant(question: string, context?: string) {
@@ -641,11 +642,55 @@ function todayIso() {
   return dateToIso(new Date())
 }
 
+function dayKey(date: Date) {
+  const copy = new Date(date)
+  copy.setHours(0, 0, 0, 0)
+  return dateToIso(copy)
+}
+
+function getStreakStats(attempts: QuizAttempt[]) {
+  const completedDays = new Set(attempts.map((attempt) => dayKey(new Date(attempt.createdAt))))
+  const today = new Date()
+  const todayKey = dayKey(today)
+  const completedToday = completedDays.has(todayKey)
+  const cursor = new Date(today)
+  if (!completedToday) cursor.setDate(cursor.getDate() - 1)
+
+  let currentStreak = 0
+  while (completedDays.has(dayKey(cursor))) {
+    currentStreak += 1
+    cursor.setDate(cursor.getDate() - 1)
+  }
+
+  const days = Array.from({ length: STREAK_WINDOW_DAYS }, (_, index) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() - (STREAK_WINDOW_DAYS - 1 - index))
+    const key = dayKey(date)
+    return {
+      key,
+      date,
+      completed: completedDays.has(key),
+      isToday: key === todayKey,
+    }
+  })
+
+  return {
+    completedToday,
+    currentStreak,
+    completedInWindow: days.filter((day) => day.completed).length,
+    days,
+  }
+}
+
+function BrandMark({ className = '', label = 'Vens Hub' }: { className?: string; label?: string }) {
+  return <span aria-label={label} className={cx('brand-logo-mask', className)} role="img" />
+}
+
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <Link to={getProfile() ? '/app' : '/'} className={cx('logo-lockup', compact && 'compact')}>
       <span className="logo-mark">
-        <img src="/brand/logo.svg" alt="Vens Hub" />
+        <BrandMark />
       </span>
       {!compact && (
         <span>
@@ -711,18 +756,30 @@ function MetricCard({
   label,
   value,
   hint,
+  to,
 }: {
   icon: ReactNode
   label: string
   value: string | number
   hint: string
+  to?: string
 }) {
-  return (
-    <article className="metric-card">
+  const content = (
+    <>
       <div className="metric-icon">{icon}</div>
       <p>{label}</p>
       <strong>{value}</strong>
       <span>{hint}</span>
+    </>
+  )
+
+  if (to) {
+    return <Link className="metric-card" to={to}>{content}</Link>
+  }
+
+  return (
+    <article className="metric-card">
+      {content}
     </article>
   )
 }
@@ -752,6 +809,56 @@ function CourseCard({ course }: { course: Course }) {
   )
 }
 
+
+function courseSummaryTags(course: Partial<Course>) {
+  const tags: string[] = []
+  if (course.units) tags.push(`${course.units} units`)
+  courseLevels(course as Course).slice(0, 1).forEach((level) => tags.push(`${level} level`))
+  courseSemesters(course as Course).slice(0, 1).forEach((semester) => tags.push(semester))
+  if (course.question_count) tags.push(`${course.question_count} questions`)
+  return tags.slice(0, 3)
+}
+
+function CourseJourneyCard({ course, to }: { course: Pick<Course, 'code' | 'title'> & Partial<Course>; to: string }) {
+  const tags = courseSummaryTags(course)
+  return (
+    <Link className="course-journey-card" to={to}>
+      <div className="course-journey-icon">
+        <GraduationCap size={22} />
+      </div>
+      <div className="course-journey-copy">
+        <span>{course.code}</span>
+        <h3>{course.title}</h3>
+        <div className="course-journey-tags">
+          {(tags.length ? tags : ['Ready to learn']).map((tag) => <small key={tag}>{tag}</small>)}
+        </div>
+      </div>
+      <div className="course-journey-cta">
+        Start <ChevronRight size={17} />
+      </div>
+    </Link>
+  )
+}
+
+function CourseEmbarkCard({ course, questionCount }: { course: Course; questionCount: number }) {
+  const tags = courseSummaryTags({ ...course, question_count: questionCount })
+  return (
+    <section className="course-embark-card">
+      <div className="course-embark-icon">
+        <GraduationCap size={30} />
+      </div>
+      <div>
+        <p className="eyebrow">Next course</p>
+        <h2>{course.title}</h2>
+        <span>{course.code}</span>
+      </div>
+      <div className="course-embark-tags">
+        {tags.map((tag) => <small key={tag}>{tag}</small>)}
+      </div>
+    </section>
+  )
+}
+
 function PublicShell({ children }: { children: ReactNode }) {
   const profile = useProfile()
   if (profile) return <Navigate to="/app" replace />
@@ -772,7 +879,7 @@ function MobileLanding() {
       setMsgIdx((i) => (i + 1) % messages.length)
     }, 3500)
     return () => clearInterval(timer)
-  }, [])
+  }, [messages.length])
 
   return (
     <section className="mobile-landing">
@@ -813,13 +920,13 @@ function LandingPage() {
         <div className="landing-copy">
           <Logo />
           <div className="hero-text">
-            <span className="eyebrow">React migration started</span>
+            <span className="eyebrow">Built for engineering students</span>
             <h1>
               Engineer <span>smarter</span> on the web.
             </h1>
             <p>
-              Courses, practice quizzes, schedules, study uploads and progress analytics are now
-              moving into a real React web app for the hackathon flow.
+              Courses, practice quizzes, schedules, study uploads and progress analytics in one
+              focused learning workspace.
             </p>
           </div>
           <div className="cta-row">
@@ -851,7 +958,7 @@ function LandingPage() {
             <div className="hero-card live">
               <div>
                 <Sparkles />
-                <p>Live course API</p>
+                <p>Live course bank</p>
               </div>
               <strong>426 courses</strong>
               <span>142K+ engineering questions</span>
@@ -1010,7 +1117,7 @@ function RegisterPage() {
     (step === 3 && email.includes('@') && password.length >= 6 && password === confirmPassword)
 
   // Fetch courses with search + pagination
-  async function fetchCourses(query: string, cursor: number, append: boolean) {
+  const fetchCourses = useCallback(async (query: string, cursor: number, append: boolean) => {
     setCourseLoading(true)
     setCourseError('')
     try {
@@ -1024,7 +1131,7 @@ function RegisterPage() {
     } finally {
       setCourseLoading(false)
     }
-  }
+  }, [departmentName])
 
   // Debounced search
   useEffect(() => {
@@ -1033,14 +1140,14 @@ function RegisterPage() {
       fetchCourses(courseSearch, 0, false)
     }, 300)
     return () => clearTimeout(timer)
-  }, [courseSearch, step, departmentCode])
+  }, [courseSearch, step, departmentCode, fetchCourses])
 
   // Initial load when entering step 2
   useEffect(() => {
     if (step === 2 && departmentName && courseList.length === 0) {
       fetchCourses('', 0, false)
     }
-  }, [step, departmentName])
+  }, [step, departmentName, courseList.length, fetchCourses])
 
   function handleDepartmentSelect(code: string, name: string) {
     setDepartmentCode(code)
@@ -1331,8 +1438,8 @@ function AuthCard({ title, subtitle, children }: { title: string; subtitle: stri
         <img src="/brand/mathematics.svg" alt="Mathematics illustration" />
         <div>
           <Sparkles />
-          <strong>Web migration shell</strong>
-          <span>React routes, live course API and local demo auth are working.</span>
+          <strong>Everything in one workspace</strong>
+          <span>Sign in, choose your courses, plan your week and keep your study momentum.</span>
         </div>
       </aside>
     </section>
@@ -1374,6 +1481,7 @@ function AppShell() {
     { to: '/app/hub', label: 'Hub', icon: <Layers3 size={22} /> },
     { to: '/app/study', label: 'Study', icon: <BookOpen size={22} /> },
     { to: '/app/courses', label: 'Courses', icon: <GraduationCap size={22} /> },
+    { to: '/app/streaks', label: 'Streaks', icon: <Flame size={22} /> },
   ]
 
   function signOut() {
@@ -1407,7 +1515,7 @@ function AppShell() {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <NavLink className="profile-chip" to="/app/profile">
+          <NavLink className="profile-chip" onClick={() => setMobileMenuOpen(false)} to="/app/profile">
             <CircleUserRound />
             <span>{profile?.firstName ?? 'User'}</span>
           </NavLink>
@@ -1496,7 +1604,6 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
             <button onClick={onClose} title="Close" type="button"><X size={18} /></button>
           </div>
         </header>
-        <div className="assistant-context">{context}</div>
         <div className="assistant-messages" ref={scrollRef}>
           {messages.map((message) => (
             <article className={cx('assistant-message', message.role, message.isError && 'error')} key={message.id}>
@@ -1529,8 +1636,8 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
 function DashboardPage() {
   const profile = useProfile()
   const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
-  const events = readJson<EventItem[]>(EVENTS_KEY, [])
   const selectedCourses = profile?.selectedCourses ?? []
+  const streakStats = getStreakStats(attempts)
 
   if (!profile) return <LoadingState />
 
@@ -1557,7 +1664,7 @@ function DashboardPage() {
             Track your selected courses, take quizzes, and monitor your progress all in one place.
           </p>
         </div>
-        <img src="/brand/hub.svg" alt="Vens Hub mark" />
+        <BrandMark className="hub-hero-mark" label="Engineering Hub" />
       </section>
 
       {/* Analytics — horizontal on mobile */}
@@ -1566,10 +1673,21 @@ function DashboardPage() {
         <div className="metrics-grid scrollable-mobile">
           <MetricCard icon={<GraduationCap />} label="My courses" value={selectedCourses.length} hint="Selected during setup" />
           <MetricCard icon={<BookOpen />} label="Questions answered" value={attempts.reduce((sum, a) => sum + a.total, 0)} hint="Across all quizzes" />
-          <MetricCard icon={<CalendarDays />} label="Saved events" value={events.length} hint="Local schedule" />
+          <MetricCard icon={<Flame />} label="Study streak" value={streakStats.currentStreak} hint={streakStats.completedToday ? 'Completed today' : 'Take a quiz today'} to="/app/streaks" />
           <MetricCard icon={<Trophy />} label="Quiz attempts" value={attempts.length} hint="Tracked in Hub" />
         </div>
       </div>
+
+      <section className="streak-dashboard-card">
+        <div>
+          <p className="eyebrow">Daily streak</p>
+          <h2>{streakStats.currentStreak} day{streakStats.currentStreak === 1 ? '' : 's'} strong</h2>
+          <p>{streakStats.completedToday ? 'You have already protected today’s streak.' : 'Jump into a quick quiz to keep your streak alive.'}</p>
+        </div>
+        <Link className="primary-button" to="/app/streaks">
+          Open streaks <ChevronRight size={18} />
+        </Link>
+      </section>
 
       {/* Course workspace */}
       <section className="section-card">
@@ -1583,14 +1701,9 @@ function DashboardPage() {
         {selectedCourses.length === 0 ? (
           <EmptyState icon={<BookOpen />} title="No courses selected yet" body="Complete the registration flow to pick your courses, or browse the full catalog." />
         ) : (
-          <div className="course-grid scrollable-mobile">
+          <div className="course-journey-grid">
             {selectedCourses.slice(0, 6).map((course) => (
-              <Link to={`/app/courses/${encodeURIComponent(course.code)}`} className="course-card" key={course.code}>
-                <div className="course-topline">
-                  <span>{course.code}</span>
-                </div>
-                <h3>{course.title}</h3>
-              </Link>
+              <CourseJourneyCard course={course} key={course.code} to={`/app/courses/${encodeURIComponent(course.code)}`} />
             ))}
           </div>
         )}
@@ -1728,7 +1841,7 @@ function CourseDetailPage() {
   const questionState = useAsync(`questions:${code}`, () => api.questions(code))
 
   const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({})
-  const questions = questionState.data?.questions ?? []
+  const questions = useMemo(() => questionState.data?.questions ?? [], [questionState.data?.questions])
   const topicsList = useMemo(() => {
     const map: Record<string, Set<string>> = {}
     questions.forEach((q) => {
@@ -1768,7 +1881,7 @@ function CourseDetailPage() {
         <div>
           <p className="eyebrow">{course.department ?? course.department_code}</p>
           <h1>{course.code}: {course.title}</h1>
-          <p>{course.description || 'Course information is available from the Vens Hub Worker API.'}</p>
+          <p>{course.description || 'Course information is available in Vens Hub.'}</p>
           <div className="pill-row">
             {course.units ? <span>{course.units} units</span> : null}
             {courseLevels(course).map((item, itemIndex) => <span key={`${item}-${itemIndex}`}>{item} Level</span>)}
@@ -1799,7 +1912,7 @@ function CourseDetailPage() {
           {!questionState.loading && !questionState.error && (
             <div className="topic-dropdown-list">
               {topicsList.length === 0 ? (
-                <EmptyState icon={<BrainCircuit />} title="No topics available" body="This course has no loaded topics in the API yet." />
+                <EmptyState icon={<BrainCircuit />} title="No topics available" body="This course does not have topics added yet." />
               ) : (
                 topicsList.map((topic) => {
                   const isExpanded = !!expandedTopics[topic.name]
@@ -1885,15 +1998,7 @@ function QuizSetupPage() {
       <Link className="back-link" to={topicParam ? `/app/courses/${encodeURIComponent(code)}` : '/app/courses'}>
         <ArrowLeft size={18} /> {topicParam ? 'Back to course' : 'Back to courses'}
       </Link>
-      <section className="quiz-setup-course">
-        <p className="eyebrow">{course.code}</p>
-        <h2>{course.title}</h2>
-        <div className="quiz-setup-stats">
-          <span>{topicQuestions.length} available</span>
-          <span>{calculationCount} calculation</span>
-          <span>{theoryCount} theory</span>
-        </div>
-      </section>
+      <CourseEmbarkCard course={course} questionCount={topicQuestions.length} />
       <section className="quiz-setup-card">
         <h3>Quiz setup</h3>
         <div className="quiz-type-selector">
@@ -1970,7 +2075,7 @@ function QuizPage() {
   if (questionState.loading) return <LoadingState label="Preparing quiz..." />
   if (questionState.error) return <ErrorState message={questionState.error} />
   if (questions.length === 0) {
-    return <EmptyState icon={<BrainCircuit />} title="No questions found" body="This course has no loaded questions in the API yet." />
+    return <EmptyState icon={<BrainCircuit />} title="No questions found" body="This course does not have questions added yet." />
   }
 
   const courseTitle = courseState.data?.course.title ?? code
@@ -2163,7 +2268,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
                 disabled={showResult}
               >
                 <span>{String.fromCharCode(65 + optionIndex)}</span>
-                <p>{hasLatexSyntax(option) ? <LatexText text={option} /> : option}</p>
+                <p><LatexText text={option} /></p>
                 {showResult && isCorrectAnswer && <CheckCircle2 size={20} className="answer-icon correct-icon" />}
                 {showResult && isSelected && !isCorrectAnswer && <AlertCircle size={20} className="answer-icon wrong-icon" />}
               </button>
@@ -2382,7 +2487,7 @@ function StudyPage() {
   async function onFileChange(fileList: FileList | null) {
     if (!fileList?.length) return
     setIsUploading(true)
-    setStatusMessage(`Uploading ${fileList.length} file(s) through the R2 signed-upload flow...`)
+    setStatusMessage(`Uploading ${fileList.length} file(s) to your study library...`)
     const uploaded: StudyUpload[] = []
     for (const file of Array.from(fileList)) {
       const result = await uploadStudyFile(file, profile)
@@ -2393,8 +2498,8 @@ function StudyPage() {
     const pendingCount = uploaded.length - uploadedCount
     setStatusMessage(
       pendingCount
-        ? `${uploadedCount} uploaded, ${pendingCount} queued as pending until the Worker R2 binding is deployed.`
-        : `${uploadedCount} file(s) uploaded to R2.`,
+        ? `${uploadedCount} uploaded, ${pendingCount} saved locally and waiting to finish syncing.`
+        : `${uploadedCount} file(s) uploaded successfully.`,
     )
     setIsUploading(false)
   }
@@ -2409,10 +2514,10 @@ function StudyPage() {
       <section className="study-grid">
         <div className="section-card upload-drop">
           <UploadCloud size={42} />
-          <h2>R2 study uploads</h2>
+          <h2>Study uploads</h2>
           <p>
-            Files now go through a Worker-compatible signed upload flow: presign, PUT bytes, then finalize metadata.
-            If the deployed Worker does not have the R2 binding yet, the file is clearly marked pending instead of pretending it uploaded.
+            Add PDFs, notes and textbooks to keep your course materials close while you study.
+            Uploads are marked clearly while they sync.
           </p>
           <label className="primary-button">
             {isUploading ? 'Uploading...' : 'Choose files'}
@@ -2439,10 +2544,9 @@ function StudyPage() {
                     <strong>{file.name}</strong>
                     <span>{formatBytes(file.size)} saved {new Date(file.createdAt).toLocaleDateString()}</span>
                     <span className={cx('upload-badge', file.status ?? 'pending_upload')}>
-                      {file.status === 'uploaded' ? 'Uploaded to R2' : file.status === 'failed' ? 'Failed' : 'Pending Worker/R2'}
+                      {file.status === 'uploaded' ? 'Synced' : file.status === 'failed' ? 'Failed' : 'Sync pending'}
                     </span>
-                    {file.objectKey && <code>{file.objectKey}</code>}
-                    {file.error && <small>{file.error}</small>}
+                    {file.error && <small>Could not finish syncing. Try again later.</small>}
                   </div>
                   <div className="file-actions">
                     {file.url && <a href={file.url} target="_blank" rel="noreferrer">Open</a>}
@@ -2511,6 +2615,7 @@ function HubPage() {
   const totalAnswered = localAttempts.reduce((sum, a) => sum + a.total, 0)
   const totalCorrect = localAttempts.reduce((sum, a) => sum + a.score, 0)
   const average = totalAnswered ? Math.round((totalCorrect / totalAnswered) * 100) : 0
+  const streakStats = getStreakStats(localAttempts)
 
   // Server-side aggregates
   const totalKcs = Object.values(stats).reduce((sum, s) => sum + s.totalKcs, 0)
@@ -2535,6 +2640,7 @@ function HubPage() {
           <section className="metrics-grid">
             <MetricCard icon={<BarChart3 />} label="Average score" value={`${average}%`} hint="Across all quizzes" />
             <MetricCard icon={<BrainCircuit />} label="Questions answered" value={totalAnswered} hint="Total questions" />
+            <MetricCard icon={<Flame />} label="Study streak" value={streakStats.currentStreak} hint={streakStats.completedToday ? 'Completed today' : 'Take a quiz today'} to="/app/streaks" />
             <MetricCard icon={<Target />} label="Quiz sessions" value={localAttempts.length} hint="Quizzes completed" />
             <MetricCard icon={<GraduationCap />} label="Courses studied" value={Object.keys(localCourseStats).length} hint="Unique courses" />
           </section>
@@ -2798,6 +2904,79 @@ function HubPage() {
             />
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+function StreaksPage() {
+  const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
+  const stats = getStreakStats(attempts)
+  const [tab, setTab] = useState<'personal' | 'friends'>('personal')
+  const latestAttempt = attempts[0]
+  const quizTarget = latestAttempt ? `/app/courses/${encodeURIComponent(latestAttempt.courseCode)}/quiz` : '/app/courses'
+
+  return (
+    <div className="page-stack narrow streaks-page">
+      <Link className="back-link" to="/app">
+        <ArrowLeft size={18} /> Back to dashboard
+      </Link>
+      <PageHeader title="Streaks" />
+      <div className="streak-tabs" role="tablist" aria-label="Streak views">
+        <button className={cx(tab === 'personal' && 'active')} onClick={() => setTab('personal')} type="button">
+          PERSONAL
+        </button>
+        <button className={cx(tab === 'friends' && 'active')} onClick={() => setTab('friends')} type="button">
+          FRIENDS
+        </button>
+      </div>
+
+      {tab === 'personal' ? (
+        <>
+          <section className={cx('streak-hero-card', !stats.completedToday && 'needs-action')}>
+            <div className="streak-number-block">
+              <span>STREAKS HUB</span>
+              <strong>{stats.currentStreak}</strong>
+              <p>day streak!</p>
+            </div>
+            <Flame className="streak-fire" />
+          </section>
+
+          <section className="streak-cta-card">
+            <div className="streak-clock">
+              <TimerReset size={34} />
+            </div>
+            <div>
+              <h2>{stats.completedToday ? 'Today is covered' : 'Keep your streak alive'}</h2>
+              <p>{stats.completedToday ? 'Come back tomorrow and keep the chain going.' : 'Jump back into the Hub for a quick quiz before the day ends.'}</p>
+              <Link to={quizTarget}>DO YOUR QUIZ</Link>
+            </div>
+          </section>
+
+          <section className="streak-calendar-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Study calendar</p>
+                <h2>{stats.completedInWindow}/{STREAK_WINDOW_DAYS} days completed</h2>
+              </div>
+            </div>
+            <div className="streak-calendar-grid">
+              {stats.days.map((day) => (
+                <div className={cx('streak-day', day.completed && 'completed', day.isToday && 'today')} key={day.key}>
+                  <span>{day.date.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                  <strong>{day.date.getDate()}</strong>
+                  <small>{day.completed ? 'Done' : day.isToday ? 'Today' : 'Open'}</small>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="state-card streak-friends-card">
+          <Users size={52} />
+          <h3>Friends streaks coming soon</h3>
+          <p>Keep building your personal rhythm. Friend comparisons can come after the core learning flow feels solid.</p>
+        </section>
       )}
     </div>
   )
@@ -3155,7 +3334,7 @@ function ProfilePage() {
 function NotFoundPage() {
   return (
     <div className="page-stack narrow">
-      <EmptyState icon={<AlertCircle />} title="Page not found" body="The route is not part of the React migration shell yet." />
+      <EmptyState icon={<AlertCircle />} title="Page not found" body="This page is not available in Vens Hub yet." />
       <Link className="primary-button" to="/app">Back home</Link>
     </div>
   )
@@ -3186,6 +3365,7 @@ function App() {
             <Route path="study" element={<StudyPage />} />
             <Route path="hub" element={<HubPage />} />
             <Route path="hub/:code" element={<CourseAnalyticsPage />} />
+            <Route path="streaks" element={<StreaksPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>

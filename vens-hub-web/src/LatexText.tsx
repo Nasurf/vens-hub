@@ -6,7 +6,7 @@ interface LatexTextProps {
   className?: string
 }
 
-export function hasLatexSyntax(text: string): boolean {
+function hasLatexSyntax(text: string): boolean {
   return text.includes('$') || /\\[a-zA-Z]+/.test(text)
 }
 

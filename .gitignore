@@ -40,6 +40,12 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 
+# Generated Flutter platform shells not used by the web hackathon build
+/ios/
+/linux/
+/macos/
+/windows/
+
 # IDE
 .idea/
 .vscode/
