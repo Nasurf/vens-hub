@@ -1061,7 +1061,7 @@ function RegisterPage() {
                   <button
                     className={cx(departmentCode === department.code && 'selected')}
                     key={department.code}
-                    onClick={() => handleDepartmentSelect(department.code)}
+                    onClick={() => handleDepartmentSelect(department.code, department.name)}
                   >
                     <Building2 size={18} /> {department.name}
                   </button>
