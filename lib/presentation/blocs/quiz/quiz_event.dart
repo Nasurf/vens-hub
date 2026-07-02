@@ -122,3 +122,16 @@ class SetTheoryTimer extends QuizEvent {
   @override
   List<Object?> get props => [isTimed, minutes];
 }
+
+/// Process quiz results through the adaptive engine.
+/// Fires at quiz end to submit all answers to the BKT Worker
+/// and store the resulting mastery state locally.
+class ProcessAdaptiveResults extends QuizEvent {
+  /// Map of question global index → selected answer index
+  final Map<int, int> questionAnswers;
+
+  const ProcessAdaptiveResults({required this.questionAnswers});
+
+  @override
+  List<Object?> get props => [questionAnswers];
+}

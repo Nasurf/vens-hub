@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 import 'package:vens_hub/core/constants/constants.dart';
-// import '../../../../core/Brain/data_formatting.dart';
 
 class QuizState extends Equatable {
   final String course;
@@ -18,15 +17,17 @@ class QuizState extends Equatable {
   final Map<int, List<String>> gapFillUserAnswers;
   final Map<int, bool> gapFillIsCorrect;
   final Map<int, int>
-  gapFillCorrectCountByQuestion; // number of gaps correct per question
-  final Map<int, int> gapFillTotalGapsByQuestion; // total gaps per question
+  gapFillCorrectCountByQuestion;
+  final Map<int, int> gapFillTotalGapsByQuestion;
   final Map<int, int> mcqSelectedAnswers;
   final Map<int, bool> mcqIsCorrect;
-  final DateTime? startedAt; // when the quiz session started
-  final DateTime? endedAt; // optional, when the quiz session ended
-  // Timed theory settings
+  final DateTime? startedAt;
+  final DateTime? endedAt;
   final bool? isTheoryTimed;
-  final int? theoryTimeMinutes; // duration in minutes when timed
+  final int? theoryTimeMinutes;
+
+  // Adaptive learning: per-course mastery after quiz submission
+  final Map<String, Map<String, dynamic>>? adaptiveProgress;
 
   bool get isLastQuestion => currentQuestionIndex >= allQuestions.length - 1;
   Object? get currentQuestion =>
@@ -55,6 +56,7 @@ class QuizState extends Equatable {
     this.endedAt,
     this.isTheoryTimed,
     this.theoryTimeMinutes,
+    this.adaptiveProgress,
   });
 
   QuizState copyWith({
@@ -80,6 +82,7 @@ class QuizState extends Equatable {
     Object? endedAt = _sentinel,
     bool? isTheoryTimed,
     Object? theoryTimeMinutes = _sentinel,
+    Object? adaptiveProgress = _sentinel,
   }) {
     return QuizState(
       course: course ?? this.course,
@@ -92,26 +95,20 @@ class QuizState extends Equatable {
       allQuestions: allQuestions ?? this.allQuestions,
       currentQuestionIndex: currentQuestionIndex ?? this.currentQuestionIndex,
       selectedAnswer:
-          selectedAnswer != _sentinel
-              ? selectedAnswer as int?
-              : this.selectedAnswer,
+          selectedAnswer != _sentinel ? selectedAnswer as int? : this.selectedAnswer,
       isAnswerChoosen: isAnswerChoosen ?? this.isAnswerChoosen,
       numOfCorrectAnswers: numOfCorrectAnswers ?? this.numOfCorrectAnswers,
       gapFillUserAnswers: gapFillUserAnswers ?? this.gapFillUserAnswers,
       gapFillIsCorrect: gapFillIsCorrect ?? this.gapFillIsCorrect,
-      gapFillCorrectCountByQuestion:
-          gapFillCorrectCountByQuestion ?? this.gapFillCorrectCountByQuestion,
-      gapFillTotalGapsByQuestion:
-          gapFillTotalGapsByQuestion ?? this.gapFillTotalGapsByQuestion,
+      gapFillCorrectCountByQuestion: gapFillCorrectCountByQuestion ?? this.gapFillCorrectCountByQuestion,
+      gapFillTotalGapsByQuestion: gapFillTotalGapsByQuestion ?? this.gapFillTotalGapsByQuestion,
       mcqSelectedAnswers: mcqSelectedAnswers ?? this.mcqSelectedAnswers,
       mcqIsCorrect: mcqIsCorrect ?? this.mcqIsCorrect,
       startedAt: startedAt ?? this.startedAt,
       endedAt: endedAt != _sentinel ? endedAt as DateTime? : this.endedAt,
       isTheoryTimed: isTheoryTimed ?? this.isTheoryTimed,
-      theoryTimeMinutes:
-          theoryTimeMinutes != _sentinel
-              ? theoryTimeMinutes as int?
-              : this.theoryTimeMinutes,
+      theoryTimeMinutes: theoryTimeMinutes != _sentinel ? theoryTimeMinutes as int? : this.theoryTimeMinutes,
+      adaptiveProgress: adaptiveProgress != _sentinel ? adaptiveProgress as Map<String, Map<String, dynamic>>? : this.adaptiveProgress,
     );
   }
 
@@ -141,5 +138,6 @@ class QuizState extends Equatable {
     endedAt,
     isTheoryTimed,
     theoryTimeMinutes,
+    adaptiveProgress,
   ];
 }
