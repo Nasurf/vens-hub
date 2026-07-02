@@ -6,9 +6,13 @@ interface LatexTextProps {
   className?: string
 }
 
+export function hasLatexSyntax(text: string): boolean {
+  return text.includes('$') || /\\[a-zA-Z]+/.test(text)
+}
+
 function renderLatex(text: string): string {
   // If there are no LaTeX markers ($, $$, or backslash commands), just return the original text
-  if (!text.includes('$') && !text.includes('\\')) {
+  if (!hasLatexSyntax(text)) {
     return text
   }
 
@@ -115,7 +119,16 @@ function renderLatex(text: string): string {
 }
 
 export function LatexText({ text, className }: LatexTextProps) {
+  const shouldRenderLatex = hasLatexSyntax(text)
   const rendered = useMemo(() => renderLatex(text), [text])
+
+  if (!shouldRenderLatex) {
+    if (className) {
+      return <span className={className}>{text}</span>
+    }
+
+    return <>{text}</>
+  }
 
   return (
     <span
