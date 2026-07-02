@@ -18,7 +18,7 @@ class StartupStep {
 
 class StartupDiagnosticsController extends GetxController {
   final steps = <String, StartupStep>{}.obs;
-  final visible = (kIsWeb && kDebugMode).obs; // default show on web debug
+  final visible = kDebugMode.obs; // default show on debug mode
 
   StartupStep _ensure(String name) {
     return steps.putIfAbsent(name, () => StartupStep(name));
