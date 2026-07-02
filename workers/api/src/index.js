@@ -703,6 +703,8 @@ export default {
           return error('firstName, email, and departmentCode are required', 400);
         }
 
+        const safeLastName = lastName || '';
+        const safeDepartmentName = departmentName || '';
         const now = new Date().toISOString();
         const coursesJson = JSON.stringify(selectedCourses || []);
 
@@ -717,7 +719,7 @@ export default {
             department_name = excluded.department_name,
             selected_courses = excluded.selected_courses,
             updated_at = excluded.updated_at
-        `).bind(userId, firstName, lastName, email, departmentCode, departmentName, coursesJson, now, now).run();
+        `).bind(userId, firstName, safeLastName, email, departmentCode, safeDepartmentName, coursesJson, now, now).run();
 
         return json({ ok: true, userId });
       }
@@ -731,8 +733,12 @@ export default {
 
         return json({
           profile: {
-            ...row,
-            selected_courses: JSON.parse(row.selected_courses || '[]'),
+            firstName: row.first_name,
+            lastName: row.last_name,
+            email: row.email,
+            departmentCode: row.department_code,
+            departmentName: row.department_name,
+            selectedCourses: JSON.parse(row.selected_courses || '[]'),
           }
         });
       }
@@ -750,8 +756,13 @@ export default {
       if (path === '/courses') {
         const url = new URL(request.url);
         const q = url.searchParams.get('q') || '';
-        const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
-        const cursor = parseInt(url.searchParams.get('cursor') || '0');
+        let limit = parseInt(url.searchParams.get('limit') || '20');
+        if (isNaN(limit) || limit < 1) limit = 20;
+        limit = Math.min(limit, 50);
+
+        let cursor = parseInt(url.searchParams.get('cursor') || '0');
+        if (isNaN(cursor) || cursor < 0) cursor = 0;
+
         const dept = url.searchParams.get('department') || '';
         const lvl = url.searchParams.get('level') || '';
 
@@ -823,8 +834,12 @@ export default {
         const deptCode = segments[1].toUpperCase();
         const url = new URL(request.url);
         const q = url.searchParams.get('q') || '';
-        const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
-        const cursor = parseInt(url.searchParams.get('cursor') || '0');
+        let limit = parseInt(url.searchParams.get('limit') || '20');
+        if (isNaN(limit) || limit < 1) limit = 20;
+        limit = Math.min(limit, 50);
+
+        let cursor = parseInt(url.searchParams.get('cursor') || '0');
+        if (isNaN(cursor) || cursor < 0) cursor = 0;
 
         let whereClause = 'WHERE department_code = ?';
         const params = [deptCode];

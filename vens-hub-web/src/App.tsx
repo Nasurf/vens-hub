@@ -332,8 +332,13 @@ async function postJson<T>(baseUrl: string, path: string, body: unknown): Promis
 const api = {
   departments: () => fetchJson<{ departments: Department[] }>('/departments'),
   courses: () => fetchJson<{ courses: Course[] }>('/courses'),
-  departmentCourses: (code: string) =>
-    fetchJson<{ courses: Course[] }>(`/departments/${encodeURIComponent(code)}/courses`),
+  departmentCourses: (code: string, q?: string, limit?: number, cursor?: number) => {
+    const params = new URLSearchParams({ limit: String(limit ?? 20), cursor: String(cursor ?? 0) })
+    if (q) params.set('q', q)
+    return fetchJson<{ courses: Course[]; total: number; hasMore: boolean; nextCursor: number }>(
+      `/departments/${encodeURIComponent(code)}/courses?${params}`
+    )
+  },
   course: (code: string) => fetchJson<{ course: Course }>(`/courses/${encodeURIComponent(code)}`),
   questions: (code: string) =>
     fetchJson<{ questions: Question[]; count: number }>(`/questions/${encodeURIComponent(code)}`),
@@ -844,23 +849,36 @@ function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Course search + pagination state
   const [courseList, setCourseList] = useState<Course[]>([])
   const [courseLoading, setCourseLoading] = useState(false)
   const [courseError, setCourseError] = useState('')
+  const [courseTotal, setCourseTotal] = useState(0)
+  const [courseHasMore, setCourseHasMore] = useState(false)
+  const [courseNextCursor, setCourseNextCursor] = useState(0)
+  const [courseSearch, setCourseSearch] = useState('')
   const [selectedCourses, setSelectedCourses] = useState<Array<{ code: string; title: string }>>([])
 
   const selectedDepartment = departments.find((department) => department.code === departmentCode)
+
+  // 4 steps: Name → Department → Courses → Account
   const canContinue =
     (step === 0 && firstName.trim() && lastName.trim()) ||
     (step === 1 && departmentCode) ||
-    (step === 2 && selectedCourses.length > 0 && email.includes('@') && password.length >= 6 && password === confirmPassword)
+    (step === 2 && selectedCourses.length > 0) ||
+    (step === 3 && email.includes('@') && password.length >= 6 && password === confirmPassword)
 
-  async function fetchDepartmentCourses(code: string) {
+  // Fetch courses with search + pagination
+  async function fetchCourses(query: string, cursor: number, append: boolean) {
     setCourseLoading(true)
     setCourseError('')
     try {
-      const data = await api.departmentCourses(code)
-      setCourseList(data.courses ?? [])
+      const data = await api.departmentCourses(departmentCode, query, 20, cursor)
+      setCourseList((prev) => append ? [...prev, ...data.courses] : data.courses)
+      setCourseTotal(data.total)
+      setCourseHasMore(data.hasMore)
+      setCourseNextCursor(data.nextCursor)
     } catch {
       setCourseError('Failed to load courses. Try again.')
     } finally {
@@ -868,10 +886,28 @@ function RegisterPage() {
     }
   }
 
+  // Debounced search
+  useEffect(() => {
+    if (step !== 2 || !departmentCode) return
+    const timer = setTimeout(() => {
+      fetchCourses(courseSearch, 0, false)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [courseSearch, step, departmentCode])
+
+  // Initial load when entering step 2
+  useEffect(() => {
+    if (step === 2 && departmentCode && courseList.length === 0) {
+      fetchCourses('', 0, false)
+    }
+  }, [step, departmentCode])
+
   function handleDepartmentSelect(code: string) {
     setDepartmentCode(code)
     setSelectedCourses([])
-    fetchDepartmentCourses(code)
+    setCourseList([])
+    setCourseSearch('')
+    setStep(2)
   }
 
   function toggleCourse(course: Course) {
@@ -885,24 +921,32 @@ function RegisterPage() {
 
   async function next() {
     if (!canContinue) return
-    if (step < 2) {
+    if (step < 3) {
       setStep((value) => value + 1)
       return
     }
-    // Step 2 — create Firebase account
+    // Step 3 — create Firebase account + save profile
     setError('')
     setLoading(true)
     try {
-      await registerWithEmail(email, password)
+      const user = await registerWithEmail(email, password)
       if (!selectedDepartment) return
-      saveProfile({
+      const profileData = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
         departmentCode: selectedDepartment.code,
         departmentName: selectedDepartment.name,
         selectedCourses,
-      })
+      }
+      // Save to Worker (best-effort)
+      fetch(`${API_BASE}/user/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': user.uid },
+        body: JSON.stringify(profileData),
+      }).catch(() => {})
+      // Save to localStorage (fast cache)
+      saveProfile(profileData)
       navigate('/app')
     } catch (err: any) {
       const code = err?.code || ''
@@ -926,14 +970,20 @@ function RegisterPage() {
     try {
       const user = await loginWithGoogle()
       if (!selectedDepartment) return
-      saveProfile({
+      const profileData = {
         firstName: user.displayName?.split(' ')[0] || firstName.trim() || 'User',
         lastName: user.displayName?.split(' ').slice(1).join(' ') || lastName.trim() || '',
         email: user.email || email.trim(),
         departmentCode: selectedDepartment.code,
         departmentName: selectedDepartment.name,
         selectedCourses,
-      })
+      }
+      fetch(`${API_BASE}/user/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': user.uid },
+        body: JSON.stringify(profileData),
+      }).catch(() => {})
+      saveProfile(profileData)
       navigate('/app')
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user') {
@@ -951,7 +1001,7 @@ function RegisterPage() {
           <Logo />
           <h1>Create Account</h1>
           <p>Follow the steps to set up your web workspace.</p>
-          {['Your Name', 'Your Department', 'Courses & Account'].map((title, index) => (
+          {['Your Name', 'Your Department', 'Courses', 'Account'].map((title, index) => (
             <div className={cx('step-row', step === index && 'active', step > index && 'done')} key={title}>
               <span>{step > index ? <CheckCircle2 size={16} /> : index + 1}</span>
               <strong>{title}</strong>
@@ -994,7 +1044,16 @@ function RegisterPage() {
           {step === 2 && (
             <StepPanel icon={<BookOpen />} title="Pick your courses (up to 10)">
               <p className="step-hint">These will appear on your dashboard. You can change them later.</p>
-              {courseLoading ? (
+              <div className="course-search-row">
+                <Search size={16} />
+                <input
+                  className="course-search-input"
+                  value={courseSearch}
+                  onChange={(event) => setCourseSearch(event.target.value)}
+                  placeholder="Search courses by code or name..."
+                />
+              </div>
+              {courseLoading && courseList.length === 0 ? (
                 <div className="course-select-loading">
                   <span className="loader" />
                   <p>Loading courses...</p>
@@ -1002,14 +1061,17 @@ function RegisterPage() {
               ) : courseError ? (
                 <div className="course-select-loading">
                   <p className="form-error">{courseError}</p>
-                  <button className="ghost-button" onClick={() => fetchDepartmentCourses(departmentCode)}>
+                  <button className="ghost-button" onClick={() => fetchCourses(courseSearch, 0, false)}>
                     Retry
                   </button>
                 </div>
               ) : courseList.length === 0 ? (
-                <EmptyState icon={<BookOpen />} title="No courses found" body="No courses available for this department yet." />
+                <EmptyState icon={<BookOpen />} title="No courses found" body="Try a different search or department." />
               ) : (
                 <>
+                  <p className="course-select-count">
+                    Showing {courseList.length} of {courseTotal} courses
+                  </p>
                   <div className="course-select-grid">
                     {courseList.map((course) => {
                       const isSelected = selectedCourses.some((c) => c.code === course.code)
@@ -1030,20 +1092,29 @@ function RegisterPage() {
                             {courseLevels(course).slice(0, 1).map((lvl, i) => (
                               <span key={i}>{lvl} level</span>
                             ))}
-                            <span>{course.question_count ?? 0} questions</span>
                           </div>
                         </button>
                       )
                     })}
                   </div>
-                  <p className="course-select-count">
-                    {selectedCourses.length} selected{selectedCourses.length >= 10 ? ' (max reached)' : ` of 10 max`}
-                  </p>
+                  {courseHasMore && (
+                    <button
+                      className="course-load-more"
+                      onClick={() => fetchCourses(courseSearch, courseNextCursor, true)}
+                      disabled={courseLoading}
+                    >
+                      {courseLoading ? 'Loading...' : 'Show more courses'}
+                    </button>
+                  )}
                 </>
               )}
-              <div className="credentials-divider">
-                <span>Account details</span>
-              </div>
+              <p className="course-select-count" style={{ marginTop: '0.75rem' }}>
+                {selectedCourses.length} selected{selectedCourses.length >= 10 ? ' (max reached)' : ` of 10 max`}
+              </p>
+            </StepPanel>
+          )}
+          {step === 3 && (
+            <StepPanel icon={<Lock />} title="Create your account">
               <label>
                 Email address
                 <input value={email} onChange={(event) => setEmail(event.target.value)} disabled={loading} />
@@ -1057,6 +1128,7 @@ function RegisterPage() {
                 <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" disabled={loading} />
               </label>
               {error && <p className="form-error">{error}</p>}
+              <div className="auth-divider"><span>or</span></div>
               <button className="google-button full" type="button" onClick={handleGoogleSignUp} disabled={loading}>
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
@@ -1073,7 +1145,7 @@ function RegisterPage() {
               Back
             </button>
             <button className="primary-button" disabled={!canContinue || loading} onClick={next}>
-              {loading ? 'Creating account...' : step === 2 ? 'Create Account' : 'Continue'}
+              {loading ? 'Creating account...' : step === 3 ? 'Create Account' : 'Continue'}
             </button>
           </div>
         </div>
@@ -1131,14 +1203,29 @@ function demoProfile(email: string): Profile {
 
 function RequireAuth() {
   const firebaseUser = useFirebaseUser()
-  const profile = useProfile()
+  const [profile, setProfile] = useState<Profile | null>(() => getProfile())
   const location = useLocation()
+
+  // If Firebase auth is confirmed but localStorage is empty, fetch from Worker
+  useEffect(() => {
+    if (firebaseUser === 'loading' || !firebaseUser || profile) return
+    fetch(`${API_BASE}/user/profile`, {
+      headers: { 'X-User-Id': firebaseUser.uid },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.profile) {
+          saveProfile(data.profile)
+          setProfile(data.profile)
+        }
+      })
+      .catch(() => {})
+  }, [firebaseUser, profile])
 
   if (firebaseUser === 'loading') {
     return <div className="page-stack narrow"><div className="loading-spinner" /></div>
   }
   if (!firebaseUser) return <Navigate to="/login" replace state={{ from: location.pathname }} />
-  // Still need profile for user metadata — redirect to register if missing
   if (!profile) return <Navigate to="/register" replace state={{ from: location.pathname }} />
   return <Outlet />
 }
