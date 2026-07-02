@@ -59,14 +59,16 @@ export function applyBktUpdate(state, isCorrect, params) {
 
   const now = new Date().toISOString();
 
+  const sParam = state?.sParameter ?? params.sBase;
+
   const newState = {
     masteryProb: masteryAfter,
-    sParameter: state?.sParameter ?? params.sBase,
+    sParameter: sParam,
     status: computeStatus(masteryAfter, params.reviewThreshold),
     totalAttempts: (state?.totalAttempts ?? 0) + 1,
     correctAttempts: (state?.correctAttempts ?? 0) + (isCorrect ? 1 : 0),
     lastAttemptAt: now,
-    nextReviewDue: now,
+    nextReviewDue: new Date(Date.now() + sParam * params.minimumSpacingDays * 86400000).toISOString(),
   };
 
   // Status can drop back to learning if mastery falls below threshold

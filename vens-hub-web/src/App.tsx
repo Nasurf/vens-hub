@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import type { Variants } from 'framer-motion'
+import { DayPicker } from 'react-day-picker'
+import { format, isSameDay, isToday } from 'date-fns'
+import 'react-day-picker/style.css'
 import {
   AlertCircle,
   ArrowLeft,
@@ -11,6 +16,7 @@ import {
   Calculator,
   CalendarDays,
   Check,
+  Clock3,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -30,6 +36,7 @@ import {
   MessageCircle,
   Moon,
   Palette,
+  Pencil,
   PlayCircle,
   Plus,
   RefreshCw,
@@ -41,7 +48,10 @@ import {
   TimerReset,
   Trash2,
   Trophy,
+  MapPin,
+  MoreVertical,
   UploadCloud,
+  Users,
   User,
   X,
 } from 'lucide-react'
@@ -66,6 +76,17 @@ import {
   signOutUser,
   hasFirebaseConfig,
 } from './firebase'
+import { LatexText } from './LatexText'
+import {
+  submitBatchResults,
+  getUserStats,
+  getUserMastery,
+  getUserMasteryForCourse,
+  getUserAttempts,
+  type AttemptRecord,
+  type CourseStats,
+  type MasteryRecord,
+} from './adaptive'
 
 type Department = {
   name: string
@@ -122,6 +143,11 @@ type EventItem = {
   start: string
   end: string
   venue?: string
+  type?: string
+  priority?: string
+  notes?: string
+  participants?: string
+  reminder?: string
 }
 
 type StudyUpload = {
@@ -141,7 +167,7 @@ type QuizAttempt = {
   id: string
   courseCode: string
   courseTitle: string
-  mode?: 'multiple-choice' | 'theory' | 'gap-fill'
+  mode?: 'multiple-choice'
   score: number
   total: number
   createdAt: string
@@ -173,6 +199,7 @@ const PROFILE_KEY = 'vens-hub-web-profile'
 const EVENTS_KEY = 'vens-hub-web-events'
 const UPLOADS_KEY = 'vens-hub-web-uploads'
 const ATTEMPTS_KEY = 'vens-hub-web-quiz-attempts'
+const STREAK_WINDOW_DAYS = 28
 const THEME_KEY = 'vens-hub-web-theme'
 const SCHEME_KEY = 'vens-hub-web-scheme'
 
@@ -191,10 +218,10 @@ const departments: Department[] = [
 
 
 const featureHighlights = [
-  'Interactive quizzes: multiple choice, theory and gap-fill ready',
-  'Smart schedule for class planning and self-study blocks',
-  'Course workspace backed by the live Vens Hub question API',
-  'Progress hub for streaks, performance and subject focus',
+  'Practice with multiple choice, theory and gap-fill questions',
+  'Plan lectures, study blocks and assignment deadlines in one place',
+  'Explore a curated engineering course and question bank',
+  'Track streaks, performance and subject focus as you learn',
 ]
 
 function cx(...classes: Array<string | false | undefined>) {
@@ -454,6 +481,63 @@ const api = {
 }
 
 
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\\[a-z]+/g, ' ')
+    .replace(/[^a-z0-9.+-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function displayText(value: string) {
+  return value
+    .replace(/\$+/g, '')
+    .replace(/\\,/g, ' ')
+    .replace(/\\cdot/g, '·')
+    .replace(/\\times/g, '×')
+    .replace(/\\text\{([^}]*)\}/g, '$1')
+    .replace(/\\left|\\right/g, '')
+    .replace(/\\[a-zA-Z]+/g, '')
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function tokenSet(value: string) {
+  return new Set(normalizeText(value).split(' ').filter((token) => token.length > 2))
+}
+
+function scoreTheoryAnswer(answer: string, question: Question) {
+  const correctText = question.correct_answer_text || questionOptions(question)[answerIndex(question)] || question.correct_answer || ''
+  const expected = `${correctText} ${question.explanation ?? ''} ${parseJsonList(question.solution_steps).join(' ')}`
+  const answerTokens = tokenSet(answer)
+  const expectedTokens = [...tokenSet(expected)].filter((token) => !['the', 'and', 'for', 'with', 'from'].includes(token))
+  const overlap = expectedTokens.filter((token) => answerTokens.has(token)).length
+  const normalizedCorrect = normalizeText(correctText)
+  const directAnswerHit = normalizedCorrect.slice(0, 24).trim().length > 0 && normalizeText(answer).includes(normalizedCorrect.slice(0, 24).trim())
+  const ratio = expectedTokens.length ? overlap / Math.min(expectedTokens.length, 12) : 0
+  const score = directAnswerHit ? 1 : Math.min(1, ratio)
+  return {
+    score,
+    isCorrect: score >= 0.35 || directAnswerHit,
+    expected: correctText,
+  }
+}
+
+function makeGapPrompt(question: Question) {
+  const options = questionOptions(question)
+  const correct = question.correct_answer_text || options[answerIndex(question)] || question.correct_answer || 'the correct answer'
+  const explanation = question.explanation || parseJsonList(question.solution_steps)[0] || 'Use the worked solution to identify the missing term.'
+  const choices = [correct, ...options.filter((option) => normalizeText(option) !== normalizeText(correct))].slice(0, 4)
+  return {
+    statement: `The missing answer is _____. ${explanation}`,
+    correct,
+    choices,
+  }
+}
+
+
 function safePathPart(value: string) {
   return value
     .trim()
@@ -549,10 +633,9 @@ async function uploadStudyFile(file: File, profile: Profile | null): Promise<Stu
 }
 
 function makeAssistantFallback(question: string, context?: string) {
-  const scoped = context ? `
-
-Context I used: ${context}` : ''
-  return `The AI endpoint is not deployed/configured yet, but the assistant shell is working. For now, use this as the study prompt: ${question}.${scoped}`
+  void question
+  void context
+  return 'The study helper is unavailable right now. Please try again in a moment.'
 }
 
 async function askAssistant(question: string, context?: string) {
@@ -564,62 +647,6 @@ async function askAssistant(question: string, context?: string) {
     return response.answer?.trim() || makeAssistantFallback(question, context)
   } catch {
     return makeAssistantFallback(question, context)
-  }
-}
-
-function normalizeText(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/\\[a-z]+/g, ' ')
-    .replace(/[^a-z0-9.+-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function displayText(value: string) {
-  return value
-    .replace(/\$+/g, '')
-    .replace(/\\,/g, ' ')
-    .replace(/\\cdot/g, '·')
-    .replace(/\\times/g, '×')
-    .replace(/\\text\{([^}]*)\}/g, '$1')
-    .replace(/\\left|\\right/g, '')
-    .replace(/\\[a-zA-Z]+/g, '')
-    .replace(/[{}]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function tokenSet(value: string) {
-  return new Set(normalizeText(value).split(' ').filter((token) => token.length > 2))
-}
-
-function scoreTheoryAnswer(answer: string, question: Question) {
-  const correctText = question.correct_answer_text || questionOptions(question)[answerIndex(question)] || question.correct_answer || ''
-  const expected = `${correctText} ${question.explanation ?? ''} ${parseJsonList(question.solution_steps).join(' ')}`
-  const answerTokens = tokenSet(answer)
-  const expectedTokens = [...tokenSet(expected)].filter((token) => !['the', 'and', 'for', 'with', 'from'].includes(token))
-  const overlap = expectedTokens.filter((token) => answerTokens.has(token)).length
-  const normalizedCorrect = normalizeText(correctText)
-  const directAnswerHit = normalizedCorrect.length > 0 && normalizeText(answer).includes(normalizedCorrect.slice(0, 24).trim())
-  const ratio = expectedTokens.length ? overlap / Math.min(expectedTokens.length, 12) : 0
-  const score = directAnswerHit ? 1 : Math.min(1, ratio)
-  return {
-    score,
-    isCorrect: score >= 0.35 || directAnswerHit,
-    expected: correctText,
-  }
-}
-
-function makeGapPrompt(question: Question) {
-  const options = questionOptions(question)
-  const correct = question.correct_answer_text || options[answerIndex(question)] || question.correct_answer || 'the correct answer'
-  const explanation = question.explanation || parseJsonList(question.solution_steps)[0] || 'Use the worked solution to identify the missing term.'
-  const choices = [correct, ...options.filter((option) => normalizeText(option) !== normalizeText(correct))].slice(0, 4)
-  return {
-    statement: `The missing answer is _____. ${explanation}`,
-    correct,
-    choices,
   }
 }
 
@@ -661,15 +688,66 @@ function formatBytes(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function dateToIso(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return dateToIso(new Date())
+}
+
+function dayKey(date: Date) {
+  const copy = new Date(date)
+  copy.setHours(0, 0, 0, 0)
+  return dateToIso(copy)
+}
+
+function getStreakStats(attempts: QuizAttempt[]) {
+  const completedDays = new Set(attempts.map((attempt) => dayKey(new Date(attempt.createdAt))))
+  const today = new Date()
+  const todayKey = dayKey(today)
+  const completedToday = completedDays.has(todayKey)
+  const cursor = new Date(today)
+  if (!completedToday) cursor.setDate(cursor.getDate() - 1)
+
+  let currentStreak = 0
+  while (completedDays.has(dayKey(cursor))) {
+    currentStreak += 1
+    cursor.setDate(cursor.getDate() - 1)
+  }
+
+  const days = Array.from({ length: STREAK_WINDOW_DAYS }, (_, index) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() - (STREAK_WINDOW_DAYS - 1 - index))
+    const key = dayKey(date)
+    return {
+      key,
+      date,
+      completed: completedDays.has(key),
+      isToday: key === todayKey,
+    }
+  })
+
+  return {
+    completedToday,
+    currentStreak,
+    completedInWindow: days.filter((day) => day.completed).length,
+    days,
+  }
+}
+
+function BrandMark({ className = '', label = 'Vens Hub' }: { className?: string; label?: string }) {
+  return <span aria-label={label} className={cx('brand-logo-mask', className)} role="img" />
 }
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <Link to={getProfile() ? '/app' : '/'} className={cx('logo-lockup', compact && 'compact')}>
       <span className="logo-mark">
-        <img src="/brand/logo.svg" alt="Vens Hub" />
+        <BrandMark />
       </span>
       {!compact && (
         <span>
@@ -735,18 +813,30 @@ function MetricCard({
   label,
   value,
   hint,
+  to,
 }: {
   icon: ReactNode
   label: string
   value: string | number
   hint: string
+  to?: string
 }) {
-  return (
-    <article className="metric-card">
+  const content = (
+    <>
       <div className="metric-icon">{icon}</div>
       <p>{label}</p>
       <strong>{value}</strong>
       <span>{hint}</span>
+    </>
+  )
+
+  if (to) {
+    return <Link className="metric-card" to={to}>{content}</Link>
+  }
+
+  return (
+    <article className="metric-card">
+      {content}
     </article>
   )
 }
@@ -776,26 +866,124 @@ function CourseCard({ course }: { course: Course }) {
   )
 }
 
+
+function courseSummaryTags(course: Partial<Course>) {
+  const tags: string[] = []
+  if (course.units) tags.push(`${course.units} units`)
+  courseLevels(course as Course).slice(0, 1).forEach((level) => tags.push(`${level} level`))
+  courseSemesters(course as Course).slice(0, 1).forEach((semester) => tags.push(semester))
+  if (course.question_count) tags.push(`${course.question_count} questions`)
+  return tags.slice(0, 3)
+}
+
+function CourseJourneyCard({ course, to }: { course: Pick<Course, 'code' | 'title'> & Partial<Course>; to: string }) {
+  const tags = courseSummaryTags(course)
+  return (
+    <Link className="course-journey-card" to={to}>
+      <div className="course-journey-icon">
+        <GraduationCap size={22} />
+      </div>
+      <div className="course-journey-copy">
+        <span>{course.code}</span>
+        <h3>{course.title}</h3>
+        <div className="course-journey-tags">
+          {(tags.length ? tags : ['Ready to learn']).map((tag) => <small key={tag}>{tag}</small>)}
+        </div>
+      </div>
+      <div className="course-journey-cta">
+        Start <ChevronRight size={17} />
+      </div>
+    </Link>
+  )
+}
+
+function CourseEmbarkCard({ course, questionCount }: { course: Course; questionCount: number }) {
+  const tags = courseSummaryTags({ ...course, question_count: questionCount })
+  return (
+    <section className="course-embark-card">
+      <div className="course-embark-icon">
+        <GraduationCap size={30} />
+      </div>
+      <div>
+        <p className="eyebrow">Next course</p>
+        <h2>{course.title}</h2>
+        <span>{course.code}</span>
+      </div>
+      <div className="course-embark-tags">
+        {tags.map((tag) => <small key={tag}>{tag}</small>)}
+      </div>
+    </section>
+  )
+}
+
 function PublicShell({ children }: { children: ReactNode }) {
   const profile = useProfile()
   if (profile) return <Navigate to="/app" replace />
   return <main className="public-shell">{children}</main>
 }
 
+function MobileLanding() {
+  const [msgIdx, setMsgIdx] = useState(0)
+  const messages = [
+    "AI-powered quizzes that adapt to you.",
+    "Upload textbooks & study at your pace.",
+    "Track your streaks & daily progress.",
+    "Master engineering concepts daily.",
+  ]
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMsgIdx((i) => (i + 1) % messages.length)
+    }, 3500)
+    return () => clearInterval(timer)
+  }, [messages.length])
+
+  return (
+    <section className="mobile-landing">
+      <div className="mobile-landing-orbs">
+        <div className="orb orb-one" />
+        <div className="orb orb-two" />
+      </div>
+      
+      <div className="mobile-landing-top">
+        <Logo />
+        <h1>Engineering Hub</h1>
+        <div className="title-underline" />
+        <div className="scrolling-message">
+          <p key={msgIdx}>{messages[msgIdx]}</p>
+        </div>
+      </div>
+
+      <div className="mobile-landing-middle">
+         <img src="/brand/problem-solving.svg" alt="Engineering student illustration" className="mobile-hero-img" />
+      </div>
+
+      <div className="mobile-landing-bottom">
+        <Link className="primary-button full" to="/register">
+          Get Started
+        </Link>
+        <p className="mobile-auth-switch">
+          Already have an account? <Link to="/login">Sign in</Link>
+        </p>
+      </div>
+    </section>
+  )
+}
+
 function LandingPage() {
   return (
     <PublicShell>
-      <section className="landing-grid">
+      <section className="landing-grid desktop-only">
         <div className="landing-copy">
           <Logo />
           <div className="hero-text">
-            <span className="eyebrow">React migration started</span>
+            <span className="eyebrow">Built for engineering students</span>
             <h1>
               Engineer <span>smarter</span> on the web.
             </h1>
             <p>
-              Courses, practice quizzes, schedules, study uploads and progress analytics are now
-              moving into a real React web app for the hackathon flow.
+              Courses, practice quizzes, schedules, study uploads and progress analytics in one
+              focused learning workspace.
             </p>
           </div>
           <div className="cta-row">
@@ -827,7 +1015,7 @@ function LandingPage() {
             <div className="hero-card live">
               <div>
                 <Sparkles />
-                <p>Live course API</p>
+                <p>Live course bank</p>
               </div>
               <strong>426 courses</strong>
               <span>142K+ engineering questions</span>
@@ -844,6 +1032,7 @@ function LandingPage() {
           </div>
         </aside>
       </section>
+      <MobileLanding />
     </PublicShell>
   )
 }
@@ -985,7 +1174,7 @@ function RegisterPage() {
     (step === 3 && email.includes('@') && password.length >= 6 && password === confirmPassword)
 
   // Fetch courses with search + pagination
-  async function fetchCourses(query: string, cursor: number, append: boolean) {
+  const fetchCourses = useCallback(async (query: string, cursor: number, append: boolean) => {
     setCourseLoading(true)
     setCourseError('')
     try {
@@ -999,7 +1188,7 @@ function RegisterPage() {
     } finally {
       setCourseLoading(false)
     }
-  }
+  }, [departmentName])
 
   // Debounced search
   useEffect(() => {
@@ -1008,14 +1197,14 @@ function RegisterPage() {
       fetchCourses(courseSearch, 0, false)
     }, 300)
     return () => clearTimeout(timer)
-  }, [courseSearch, step, departmentCode])
+  }, [courseSearch, step, departmentCode, fetchCourses])
 
   // Initial load when entering step 2
   useEffect(() => {
     if (step === 2 && departmentName && courseList.length === 0) {
       fetchCourses('', 0, false)
     }
-  }, [step, departmentName])
+  }, [step, departmentName, courseList.length, fetchCourses])
 
   function handleDepartmentSelect(code: string, name: string) {
     setDepartmentCode(code)
@@ -1306,8 +1495,8 @@ function AuthCard({ title, subtitle, children }: { title: string; subtitle: stri
         <img src="/brand/mathematics.svg" alt="Mathematics illustration" />
         <div>
           <Sparkles />
-          <strong>Web migration shell</strong>
-          <span>React routes, live course API and local demo auth are working.</span>
+          <strong>Everything in one workspace</strong>
+          <span>Sign in, choose your courses, plan your week and keep your study momentum.</span>
         </div>
       </aside>
     </section>
@@ -1327,31 +1516,13 @@ function demoProfile(email: string): Profile {
 
 function RequireAuth() {
   const firebaseUser = useFirebaseUser()
-  const [profile, setProfile] = useState<Profile | null>(() => getProfile())
   const location = useLocation()
-
-  // If Firebase auth is confirmed but localStorage is empty, fetch from Worker
-  useEffect(() => {
-    if (firebaseUser === 'loading' || !firebaseUser || profile) return
-    fetch(`${API_BASE}/user/profile`, {
-      headers: { 'X-User-Id': firebaseUser.uid },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.profile) {
-          saveProfile(data.profile)
-          setProfile(data.profile)
-        }
-      })
-      .catch(() => {})
-  }, [firebaseUser, profile])
 
   if (firebaseUser === 'loading') {
     return <div className="page-stack narrow"><div className="loading-spinner" /></div>
   }
-  // Allow either a Firebase user (when configured) or a local profile (mock/dev fallback)
-  const authed = Boolean(firebaseUser || profile)
-  if (!authed) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  // Firebase auth required — no local profile fallback
+  if (!firebaseUser) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   return <Outlet />
 }
 
@@ -1367,6 +1538,7 @@ function AppShell() {
     { to: '/app/hub', label: 'Hub', icon: <Layers3 size={22} /> },
     { to: '/app/study', label: 'Study', icon: <BookOpen size={22} /> },
     { to: '/app/courses', label: 'Courses', icon: <GraduationCap size={22} /> },
+    { to: '/app/streaks', label: 'Streaks', icon: <Flame size={22} /> },
   ]
 
   function signOut() {
@@ -1400,7 +1572,7 @@ function AppShell() {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <NavLink className="profile-chip" to="/app/profile">
+          <NavLink className="profile-chip" onClick={() => setMobileMenuOpen(false)} to="/app/profile">
             <CircleUserRound />
             <span>{profile?.firstName ?? 'User'}</span>
           </NavLink>
@@ -1489,7 +1661,6 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
             <button onClick={onClose} title="Close" type="button"><X size={18} /></button>
           </div>
         </header>
-        <div className="assistant-context">{context}</div>
         <div className="assistant-messages" ref={scrollRef}>
           {messages.map((message) => (
             <article className={cx('assistant-message', message.role, message.isError && 'error')} key={message.id}>
@@ -1522,18 +1693,26 @@ function AIAssistantPanel({ open, onClose, context }: { open: boolean; onClose: 
 function DashboardPage() {
   const profile = useProfile()
   const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
-  const events = readJson<EventItem[]>(EVENTS_KEY, [])
   const selectedCourses = profile?.selectedCourses ?? []
+  const streakStats = getStreakStats(attempts)
 
   if (!profile) return <LoadingState />
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Dashboard" title={`Welcome, ${profile.firstName ?? 'Engineer'}`}>
+
+      {/* Welcome header */}
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">{profile.departmentName || 'Dashboard'}</p>
+          <h1>Welcome, {profile.firstName ?? 'Engineer'}</h1>
+        </div>
         <Link className="ghost-button" to="/app/courses">
-          Browse courses
+          Browse
         </Link>
-      </PageHeader>
+      </header>
+
+      {/* Hero dashboard card — desktop only */}
       <section className="hero-dashboard">
         <div>
           <p className="eyebrow">{profile.departmentName}</p>
@@ -1542,14 +1721,32 @@ function DashboardPage() {
             Track your selected courses, take quizzes, and monitor your progress all in one place.
           </p>
         </div>
-        <img src="/brand/hub.svg" alt="Vens Hub mark" />
+        <BrandMark className="hub-hero-mark" label="Engineering Hub" />
       </section>
-      <section className="metrics-grid">
-        <MetricCard icon={<GraduationCap />} label="My courses" value={selectedCourses.length} hint="Selected during setup" />
-        <MetricCard icon={<BookOpen />} label="Questions answered" value={attempts.reduce((sum, a) => sum + a.total, 0)} hint="Across all quizzes" />
-        <MetricCard icon={<CalendarDays />} label="Saved events" value={events.length} hint="Local schedule" />
-        <MetricCard icon={<Trophy />} label="Quiz attempts" value={attempts.length} hint="Tracked in Hub" />
+
+      {/* Analytics — horizontal on mobile */}
+      <div>
+        <p className="section-label">Analytics</p>
+        <div className="metrics-grid scrollable-mobile">
+          <MetricCard icon={<GraduationCap />} label="My courses" value={selectedCourses.length} hint="Selected during setup" />
+          <MetricCard icon={<BookOpen />} label="Questions answered" value={attempts.reduce((sum, a) => sum + a.total, 0)} hint="Across all quizzes" />
+          <MetricCard icon={<Flame />} label="Study streak" value={streakStats.currentStreak} hint={streakStats.completedToday ? 'Completed today' : 'Take a quiz today'} to="/app/streaks" />
+          <MetricCard icon={<Trophy />} label="Quiz attempts" value={attempts.length} hint="Tracked in Hub" />
+        </div>
+      </div>
+
+      <section className="streak-dashboard-card">
+        <div>
+          <p className="eyebrow">Daily streak</p>
+          <h2>{streakStats.currentStreak} day{streakStats.currentStreak === 1 ? '' : 's'} strong</h2>
+          <p>{streakStats.completedToday ? 'You have already protected today’s streak.' : 'Jump into a quick quiz to keep your streak alive.'}</p>
+        </div>
+        <Link className="primary-button" to="/app/streaks">
+          Open streaks <ChevronRight size={18} />
+        </Link>
       </section>
+
+      {/* Course workspace */}
       <section className="section-card">
         <div className="section-title">
           <div>
@@ -1561,14 +1758,9 @@ function DashboardPage() {
         {selectedCourses.length === 0 ? (
           <EmptyState icon={<BookOpen />} title="No courses selected yet" body="Complete the registration flow to pick your courses, or browse the full catalog." />
         ) : (
-          <div className="course-grid">
+          <div className="course-journey-grid">
             {selectedCourses.slice(0, 6).map((course) => (
-              <Link to={`/app/courses/${encodeURIComponent(course.code)}`} className="course-card" key={course.code}>
-                <div className="course-topline">
-                  <span>{course.code}</span>
-                </div>
-                <h3>{course.title}</h3>
-              </Link>
+              <CourseJourneyCard course={course} key={course.code} to={`/app/courses/${encodeURIComponent(course.code)}`} />
             ))}
           </div>
         )}
@@ -1706,7 +1898,7 @@ function CourseDetailPage() {
   const questionState = useAsync(`questions:${code}`, () => api.questions(code))
 
   const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({})
-  const questions = questionState.data?.questions ?? []
+  const questions = useMemo(() => questionState.data?.questions ?? [], [questionState.data?.questions])
   const topicsList = useMemo(() => {
     const map: Record<string, Set<string>> = {}
     questions.forEach((q) => {
@@ -1746,7 +1938,7 @@ function CourseDetailPage() {
         <div>
           <p className="eyebrow">{course.department ?? course.department_code}</p>
           <h1>{course.code}: {course.title}</h1>
-          <p>{course.description || 'Course information is available from the Vens Hub Worker API.'}</p>
+          <p>{course.description || 'Course information is available in Vens Hub.'}</p>
           <div className="pill-row">
             {course.units ? <span>{course.units} units</span> : null}
             {courseLevels(course).map((item, itemIndex) => <span key={`${item}-${itemIndex}`}>{item} Level</span>)}
@@ -1777,7 +1969,7 @@ function CourseDetailPage() {
           {!questionState.loading && !questionState.error && (
             <div className="topic-dropdown-list">
               {topicsList.length === 0 ? (
-                <EmptyState icon={<BrainCircuit />} title="No topics available" body="This course has no loaded topics in the API yet." />
+                <EmptyState icon={<BrainCircuit />} title="No topics available" body="This course does not have topics added yet." />
               ) : (
                 topicsList.map((topic) => {
                   const isExpanded = !!expandedTopics[topic.name]
@@ -1863,15 +2055,7 @@ function QuizSetupPage() {
       <Link className="back-link" to={topicParam ? `/app/courses/${encodeURIComponent(code)}` : '/app/courses'}>
         <ArrowLeft size={18} /> {topicParam ? 'Back to course' : 'Back to courses'}
       </Link>
-      <section className="quiz-setup-course">
-        <p className="eyebrow">{course.code}</p>
-        <h2>{course.title}</h2>
-        <div className="quiz-setup-stats">
-          <span>{topicQuestions.length} available</span>
-          <span>{calculationCount} calculation</span>
-          <span>{theoryCount} theory</span>
-        </div>
-      </section>
+      <CourseEmbarkCard course={course} questionCount={topicQuestions.length} />
       <section className="quiz-setup-card">
         <h3>Quiz setup</h3>
         <div className="quiz-type-selector">
@@ -1938,10 +2122,8 @@ function QuizPage() {
     if (topicParam) {
       filtered = filtered.filter((q) => q.topic_name === topicParam)
     }
-    if (typeParam === 'calculation') {
-      filtered = filtered.filter((q) => q.question_type === 'calculation')
-    } else if (typeParam === 'theory') {
-      filtered = filtered.filter((q) => q.question_type === 'theory')
+    if (typeParam) {
+      filtered = filtered.filter((q) => q.question_type === typeParam)
     }
     const limit = countParam ? Math.max(1, parseInt(countParam, 10) || 10) : 10
     return filtered.slice(0, limit)
@@ -1950,7 +2132,7 @@ function QuizPage() {
   if (questionState.loading) return <LoadingState label="Preparing quiz..." />
   if (questionState.error) return <ErrorState message={questionState.error} />
   if (questions.length === 0) {
-    return <EmptyState icon={<BrainCircuit />} title="No questions found" body="This course has no loaded questions in the API yet." />
+    return <EmptyState icon={<BrainCircuit />} title="No questions found" body="This course does not have questions added yet." />
   }
 
   const courseTitle = courseState.data?.course.title ?? code
@@ -1963,19 +2145,52 @@ function QuizCompletion({
   total,
   mode,
   onRetake,
+  topicBreakdown,
+  adaptiveSynced,
 }: {
   score: number
   total: number
   mode: string
   onRetake: () => void
+  topicBreakdown?: Record<string, { correct: number; total: number }>
+  adaptiveSynced?: boolean
 }) {
+  const percentage = total > 0 ? Math.round((score / total) * 100) : 0
+  const topics = topicBreakdown ? Object.entries(topicBreakdown).sort(([, a], [, b]) => b.correct / b.total - a.correct / a.total) : []
+
   return (
     <div className="page-stack narrow">
       <section className="completion-card">
         <Trophy size={48} />
         <p className="eyebrow">{mode} complete</p>
         <h1>{score} / {total}</h1>
-        <p>Your attempt has been saved to the Hub analytics page.</p>
+        <p className="completion-score-hint">{percentage}% correct</p>
+
+        {adaptiveSynced && (
+          <div className="completion-adaptive-status">
+            <CheckCircle2 size={16} />
+            <span>Progress saved to your mastery profile</span>
+          </div>
+        )}
+
+        {topics.length > 0 && (
+          <div className="completion-topic-breakdown">
+            <h3>Topic breakdown</h3>
+            {topics.map(([topic, data]) => {
+              const topicPct = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0
+              return (
+                <div className="completion-topic-row" key={topic}>
+                  <span className="completion-topic-name">{topic}</span>
+                  <div className="completion-topic-bar">
+                    <span className={cx('mastery-bar-fill', topicPct >= 75 ? 'mastery-high' : topicPct >= 50 ? 'mastery-mid' : 'mastery-low')} style={{ width: `${topicPct}%` }} />
+                  </div>
+                  <span className="completion-topic-score">{data.correct}/{data.total}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         <div className="cta-row center">
           <button className="ghost-button" onClick={onRetake}>Retake quiz</button>
           <Link className="primary-button" to="/app/hub">View Hub</Link>
@@ -1986,21 +2201,30 @@ function QuizCompletion({
 }
 
 function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string; courseTitle: string; questions: Question[] }) {
+  const firebaseUser = useFirebaseUser()
   const mcqQuestions = questions.filter((question) => questionOptions(question).length >= 2)
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
-  const [answers, setAnswers] = useState<Array<{ selected: number; correct: number }>>([])
+  const [answers, setAnswers] = useState<Array<{ selected: number; correct: number; topicName: string; courseCode: string }>>([])
   const [showResult, setShowResult] = useState(false)
   const [showExplanation, setShowExplanation] = useState(false)
   const [finished, setFinished] = useState(false)
+  const [adaptiveSynced, setAdaptiveSynced] = useState(false)
+  const [adaptiveResult, setAdaptiveResult] = useState<{ synced: boolean; count: number } | null>(null)
   const current = mcqQuestions[index]
   const score = answers.filter((answer) => answer.selected === answer.correct).length
   const lastAnswer = answers[answers.length - 1]
+
   const isCorrect = lastAnswer ? lastAnswer.selected === lastAnswer.correct : false
 
   function submitAnswer() {
     if (selected === null || !current) return
-    const next = [...answers, { selected, correct: answerIndex(current) }]
+    const next = [...answers, {
+      selected,
+      correct: answerIndex(current),
+      topicName: current.topic_name || 'General',
+      courseCode: code,
+    }]
     setAnswers(next)
     setShowResult(true)
   }
@@ -2018,17 +2242,48 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
         score: answers.filter((answer) => answer.selected === answer.correct).length,
         total: mcqQuestions.length,
       })
+      // Submit batch to adaptive engine (fire-and-forget)
+      const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
+      if (userId && !adaptiveSynced) {
+        setAdaptiveSynced(true)
+        const batchResults = answers.map((a) => ({
+          topicName: a.topicName,
+          courseCode: a.courseCode,
+          isCorrect: a.selected === a.correct,
+        }))
+        submitBatchResults(userId, batchResults)
+          .then((result) => setAdaptiveResult({ synced: true, count: result.count }))
+          .catch(() => setAdaptiveResult({ synced: false, count: 0 }))
+      } else {
+        setAdaptiveResult({ synced: false, count: 0 })
+      }
     } else {
       setIndex((value) => value + 1)
     }
   }
 
   if (mcqQuestions.length === 0) {
-    return <EmptyState icon={<BrainCircuit />} title="No multiple choice questions found" body="Try theory or gap-fill mode for this course." />
+    return <EmptyState icon={<BrainCircuit />} title="No multiple choice questions found" body="This course has no loaded questions in the API yet." />
   }
 
   if (finished) {
-    return <QuizCompletion mode="Multiple choice" onRetake={() => { setAnswers([]); setIndex(0); setShowResult(false); setShowExplanation(false); setFinished(false) }} score={score} total={mcqQuestions.length} />
+    // Compute topic breakdown for display
+    const topicBreakdown: Record<string, { correct: number; total: number }> = {}
+    answers.forEach((a) => {
+      if (!topicBreakdown[a.topicName]) topicBreakdown[a.topicName] = { correct: 0, total: 0 }
+      topicBreakdown[a.topicName].total++
+      if (a.selected === a.correct) topicBreakdown[a.topicName].correct++
+    })
+    return (
+      <QuizCompletion
+        mode="Multiple choice"
+        onRetake={() => { setAnswers([]); setIndex(0); setShowResult(false); setShowExplanation(false); setFinished(false); setAdaptiveResult(null) }}
+        score={score}
+        total={mcqQuestions.length}
+        topicBreakdown={topicBreakdown}
+        adaptiveSynced={adaptiveResult?.synced ?? false}
+      />
+    )
   }
 
   const options = questionOptions(current)
@@ -2048,7 +2303,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
           <span>{current.topic_name ?? 'General'}</span>
           <span>{current.difficulty ?? 'Mixed difficulty'}</span>
         </div>
-        <h2>{displayText(current.question)}</h2>
+        <h2><LatexText text={current.question} /></h2>
         <div className="answers-list">
           {options.map((option, optionIndex) => {
             const isSelected = selected === optionIndex
@@ -2070,7 +2325,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
                 disabled={showResult}
               >
                 <span>{String.fromCharCode(65 + optionIndex)}</span>
-                <p>{displayText(option)}</p>
+                <p><LatexText text={option} /></p>
                 {showResult && isCorrectAnswer && <CheckCircle2 size={20} className="answer-icon correct-icon" />}
                 {showResult && isSelected && !isCorrectAnswer && <AlertCircle size={20} className="answer-icon wrong-icon" />}
               </button>
@@ -2096,12 +2351,12 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
             ) : (
               <div className="quiz-explanation-panel">
                 <div className="explanation-answer">
-                  <strong>Correct answer:</strong> {String.fromCharCode(65 + answerIndex(current))}. {displayText(current.correct_answer_text || options[answerIndex(current)])}
+                  <strong>Correct answer:</strong> {String.fromCharCode(65 + answerIndex(current))}. <LatexText text={current.correct_answer_text || options[answerIndex(current)]} />
                 </div>
                 {current.explanation && (
                   <div className="explanation-text">
                     <strong>Explanation:</strong>
-                    <p>{displayText(current.explanation)}</p>
+                    <p><LatexText text={current.explanation} /></p>
                   </div>
                 )}
                 {solutionSteps.length > 0 && (
@@ -2109,7 +2364,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
                     <strong>Solution steps:</strong>
                     <ol>
                       {solutionSteps.map((step, i) => (
-                        <li key={i}>{displayText(step)}</li>
+                        <li key={i}><LatexText text={step} /></li>
                       ))}
                     </ol>
                   </div>
@@ -2270,82 +2525,154 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
   )
 }
 
-function SchedulePage() {
-  const [events, setEvents] = useStoredList<EventItem>(EVENTS_KEY, [])
-  const [form, setForm] = useState({ title: '', course: '', date: todayIso(), start: '09:00', end: '10:00', venue: '' })
-  const todaysEvents = events.filter((event) => event.date === form.date).sort((a, b) => a.start.localeCompare(b.start))
 
-  function addEvent(event: FormEvent<HTMLFormElement>) {
+function SchedulePage() {
+  const profile = useProfile()
+  const defaultCourse = profile?.selectedCourses?.[0]?.code ?? ''
+  const createEmptyForm = (date = todayIso()) => ({
+    title: '',
+    course: defaultCourse,
+    date,
+    start: '09:00',
+    end: '10:00',
+    venue: '',
+    type: 'Study block',
+    priority: 'Medium',
+    notes: '',
+    participants: '',
+    reminder: '15 minutes before',
+  })
+  const [events, setEvents] = useStoredList<EventItem>(EVENTS_KEY, [])
+  const [form, setForm] = useState(createEmptyForm)
+  const [month, setMonth] = useState<Date>(new Date())
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
+  const selectedDate = new Date(`${form.date}T00:00:00`)
+  const weekStart = new Date(selectedDate)
+  weekStart.setDate(selectedDate.getDate() - selectedDate.getDay() + 1)
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart)
+    date.setDate(weekStart.getDate() + index)
+    return date
+  })
+  const todaysEvents = events.filter((event) => event.date === form.date).sort((a, b) => a.start.localeCompare(b.start))
+  const weekEvents = weekDays.flatMap((day) => events.filter((event) => event.date === dateToIso(day)))
+  const eventsByDate = useMemo(() => events.reduce<Record<string, EventItem[]>>((dates, item) => {
+    dates[item.date] = [...(dates[item.date] ?? []), item]
+    return dates
+  }, {}), [events])
+  const selectedDateLabel = format(selectedDate, 'EEEE, MMMM d')
+  const isEndBeforeStart = form.end <= form.start
+  const canSaveEvent = form.title.trim().length > 0 && !isEndBeforeStart
+  const firstName = profile?.firstName ?? 'Engineer'
+  const sampleEvents = ['Diagnostic test', 'Team planning', 'Interns visit', 'Online visit', 'Follow-up']
+
+  function selectDate(date: Date) {
+    setForm((value) => ({ ...value, date: dateToIso(date) }))
+  }
+
+  function openAddModal(date = form.date) {
+    setEditingEventId(null)
+    setForm(createEmptyForm(date))
+    setIsModalOpen(true)
+  }
+
+  function openEditModal(item: EventItem) {
+    setEditingEventId(item.id)
+    setForm({
+      title: item.title,
+      course: item.course ?? '',
+      date: item.date,
+      start: item.start,
+      end: item.end,
+      venue: item.venue ?? '',
+      type: item.type ?? 'Study block',
+      priority: item.priority ?? 'Medium',
+      notes: item.notes ?? '',
+      participants: item.participants ?? '',
+      reminder: item.reminder ?? '15 minutes before',
+    })
+    setIsModalOpen(true)
+  }
+
+  function closeEventModal() {
+    setIsModalOpen(false)
+    setEditingEventId(null)
+    setForm((value) => createEmptyForm(value.date))
+  }
+
+  function saveEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!form.title.trim()) return
-    setEvents([{ id: crypto.randomUUID(), ...form, title: form.title.trim() }, ...events])
-    setForm((value) => ({ ...value, title: '', course: '', venue: '' }))
+    if (!canSaveEvent) return
+
+    const nextEvent = {
+      ...form,
+      id: editingEventId ?? crypto.randomUUID(),
+      title: form.title.trim(),
+      course: form.course.trim(),
+      venue: form.venue.trim(),
+      notes: form.notes.trim(),
+      participants: form.participants.trim(),
+    }
+
+    setEvents(editingEventId ? events.map((item) => (item.id === editingEventId ? nextEvent : item)) : [nextEvent, ...events])
+    closeEventModal()
   }
 
   function removeEvent(id: string) {
     setEvents(events.filter((event) => event.id !== id))
+    if (editingEventId === id) closeEventModal()
+  }
+
+  const modifiers = {
+    today: (date: Date) => isToday(date),
+    selected: (date: Date) => isSameDay(date, selectedDate),
+    'has-events': (date: Date) => (eventsByDate[dateToIso(date)]?.length ?? 0) > 0,
+  }
+  const eventVariants: Variants = {
+    hidden: { opacity: 0, y: 12, scale: 0.97 },
+    visible: (i: number) => ({ opacity: 1, y: 0, scale: 1, transition: { delay: i * 0.045, duration: 0.28, ease: 'easeOut' } }),
+    exit: { opacity: 0, x: -20, transition: { duration: 0.18, ease: 'easeOut' } },
   }
 
   return (
-    <div className="page-stack">
-      <PageHeader eyebrow="Planner" title="Schedule" />
-      <section className="planner-grid">
-        <form className="section-card event-form" onSubmit={addEvent}>
-          <h2>Add Event</h2>
-          <label>
-            Event title
-            <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Power Systems lecture" />
-          </label>
-          <label>
-            Course
-            <input value={form.course} onChange={(event) => setForm({ ...form, course: event.target.value })} placeholder="EEE 401" />
-          </label>
-          <div className="three-col">
-            <label>
-              Date
-              <input value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} type="date" />
-            </label>
-            <label>
-              Start
-              <input value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} type="time" />
-            </label>
-            <label>
-              End
-              <input value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} type="time" />
-            </label>
+    <div className="page-stack schedule-page">
+      <PageHeader eyebrow="Planner" title={`Stay up to date, ${firstName}`}>
+        <div className="schedule-header-actions">
+          <button className="primary-button" onClick={() => openAddModal()} type="button"><Plus size={18} /> Add event</button>
+          <button className="ghost-button icon-only" onClick={() => selectDate(new Date())} type="button" aria-label="Jump to today"><RefreshCw size={18} /></button>
+        </div>
+      </PageHeader>
+
+      <section className="schedule-board section-card">
+        <div className="schedule-toolbar">
+          <button className="schedule-range" type="button">{format(weekDays[0], 'MMM d')}–{format(weekDays[6], 'd')} <ChevronDown size={16} /></button>
+          <div className="schedule-view-tabs" role="tablist" aria-label="Schedule view">
+            {(['day', 'week', 'month'] as const).map((mode) => <button key={mode} className={cx(viewMode === mode && 'active')} onClick={() => setViewMode(mode)} type="button">{mode}</button>)}
           </div>
-          <label>
-            Venue
-            <input value={form.venue} onChange={(event) => setForm({ ...form, venue: event.target.value })} placeholder="Engineering block" />
-          </label>
-          <button className="primary-button full" type="submit"><Plus size={18} /> Add Event</button>
-        </form>
-        <section className="section-card agenda-card">
-          <div className="section-title">
-            <div>
-              <p className="eyebrow">Agenda</p>
-              <h2>{new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
-            </div>
-            <span className="score-chip">{todaysEvents.length} events</span>
-          </div>
-          {todaysEvents.length === 0 ? (
-            <EmptyState icon={<CalendarDays />} title="No events for this date" body="Add lectures, study sessions or assignment deadlines." />
-          ) : (
-            <div className="timeline-list">
-              {todaysEvents.map((item) => (
-                <article key={item.id}>
-                  <time>{item.start} - {item.end}</time>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.course || 'Personal event'} {item.venue ? `at ${item.venue}` : ''}</p>
-                  </div>
-                  <button onClick={() => removeEvent(item.id)}><X size={16} /></button>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+        </div>
+        <div className="week-strip">
+          <span className="week-corner">W</span>
+          {weekDays.map((day) => <button key={dateToIso(day)} className={cx('week-day-card', isSameDay(day, selectedDate) && 'selected', isToday(day) && 'today')} onClick={() => selectDate(day)} type="button"><span>{format(day, 'EEE')}</span><strong>{format(day, 'dd/MM')}</strong></button>)}
+        </div>
+        <div className="schedule-week-grid">
+          <div className="time-rail">{['07:00', '07:30', '08:00', '08:30', '09:00', '09:30'].map((time) => <span key={time}>{time}</span>)}</div>
+          {weekDays.map((day, dayIndex) => {
+            const iso = dateToIso(day)
+            const dayEvents = (eventsByDate[iso] ?? []).sort((a, b) => a.start.localeCompare(b.start))
+            const cards = dayEvents.length ? dayEvents : sampleEvents.slice(0, dayIndex % 3).map((title, i) => ({ id: `${iso}-${title}`, title, date: iso, start: `0${7 + i}:00`, end: `0${7 + i}:30`, course: i % 2 ? 'Primary Care' : 'Clinical Immunology', venue: i % 2 ? 'Room 312' : 'Room 200', type: title, priority: i === 0 ? 'High' : 'Medium', participants: 'TY, AB, NR', notes: '', reminder: 'None' }))
+            return <div className="schedule-day-column" key={iso}><AnimatePresence mode="popLayout">{cards.map((item, i) => <motion.article className={cx('schedule-event-card', `tone-${(i + dayIndex) % 4}`, dayEvents.length === 0 && 'sample')} key={item.id} custom={i} variants={eventVariants} initial="hidden" animate="visible" exit="exit" layout><div className="event-card-top"><span className="event-icon"><CalendarDays size={14} /></span>{dayEvents.length > 0 ? <button className="event-edit-icon" aria-label={`Edit ${item.title}`} onClick={() => openEditModal(item)} type="button"><Pencil size={14} /></button> : <MoreVertical size={15} />}</div><strong>{item.title}</strong><small>{item.venue || 'Vens campus'}</small>{item.notes && <p>{item.notes}</p>}<div className="event-card-meta"><span><Clock3 size={12} /> {item.start} - {item.end}</span>{dayEvents.length > 0 && <button aria-label={`Delete ${item.title}`} onClick={() => removeEvent(item.id)} type="button"><X size={13} /></button>}</div>{item.participants && <div className="avatar-row">{item.participants.split(',').slice(0, 4).map((person) => <span key={person.trim()}>{person.trim().slice(0, 2).toUpperCase()}</span>)}</div>}</motion.article>)}</AnimatePresence></div>
+          })}
+        </div>
       </section>
+
+      <section className="schedule-lower-grid">
+        <motion.div className="section-card calendar-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: 'easeOut' }}><DayPicker mode="single" selected={selectedDate} onDayClick={(date: Date) => { if (date) selectDate(date) }} month={month} onMonthChange={setMonth} showOutsideDays modifiers={modifiers} classNames={{ root: 'rdp-root', months: 'rdp-months', month_caption: 'rdp-month-caption', nav: 'rdp-nav', button_previous: 'rdp-nav-btn', button_next: 'rdp-nav-btn', month_grid: 'rdp-month-grid', weekdays: 'rdp-weekdays', weekday: 'rdp-weekday', day: 'rdp-day', day_button: 'rdp-day-btn', selected: 'rdp-selected', today: 'rdp-today', outside: 'rdp-outside' }} modifiersClassNames={{ 'has-events': 'rdp-has-events' }} /></motion.div>
+        <motion.section className="section-card agenda-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}><div className="section-title"><div><h2>{selectedDateLabel}</h2><p>{weekEvents.length} event{weekEvents.length === 1 ? '' : 's'} planned this week</p></div><span className="score-chip">{todaysEvents.length} today</span></div>{todaysEvents.length === 0 ? <EmptyState icon={<CalendarDays />} title="No saved events for this date" body="Use Add event to plan lectures, study blocks, reminders, venues and participants." /> : <div className="timeline-list"><AnimatePresence mode="popLayout">{todaysEvents.map((item, i) => <motion.article key={item.id} custom={i} variants={eventVariants} initial="hidden" animate="visible" exit="exit" layout><time>{item.start} – {item.end}</time><div><strong>{item.title}</strong><p>{item.course || item.type || 'Personal event'} {item.venue ? <><MapPin size={14} /> {item.venue}</> : ''}</p></div><div className="timeline-actions"><motion.button aria-label={`Edit ${item.title}`} onClick={() => openEditModal(item)} type="button" whileTap={{ scale: 0.9 }} transition={{ duration: 0.1 }}><Pencil size={16} /></motion.button><motion.button aria-label={`Delete ${item.title}`} onClick={() => removeEvent(item.id)} type="button" whileTap={{ scale: 0.9 }} transition={{ duration: 0.1 }}><X size={16} /></motion.button></div></motion.article>)}</AnimatePresence></div>}</motion.section>
+      </section>
+
+      <AnimatePresence>{isModalOpen && <motion.div className="schedule-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><motion.form className="schedule-modal section-card" onSubmit={saveEvent} initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.96 }} transition={{ duration: 0.25, ease: 'easeOut' }}><div className="modal-head"><div><p className="eyebrow">{editingEventId ? 'Edit schedule item' : 'New schedule item'}</p><h2>{editingEventId ? 'Edit event' : 'Add event menu'}</h2></div><button className="ghost-button icon-only" type="button" onClick={closeEventModal} aria-label="Close event form"><X size={18} /></button></div><label>Event title<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Power systems revision" required autoFocus /></label><div className="two-col"><label>Course or label<input value={form.course} onChange={(event) => setForm({ ...form, course: event.target.value })} placeholder="EEE 401" /></label><label>Venue<input value={form.venue} onChange={(event) => setForm({ ...form, venue: event.target.value })} placeholder="Engineering block, Room 312" /></label></div><div className="three-col schedule-time-fields"><label>Date<input value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} type="date" /></label><label>Start<input value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} type="time" /></label><label>End<input value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} type="time" /></label></div><div className="three-col"><label>Type<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Study block</option><option>Lecture</option><option>Quiz</option><option>Deadline</option><option>Group meeting</option></select></label><label>Priority<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}><option>Low</option><option>Medium</option><option>High</option></select></label><label>Reminder<select value={form.reminder} onChange={(event) => setForm({ ...form, reminder: event.target.value })}><option>None</option><option>15 minutes before</option><option>1 hour before</option><option>1 day before</option></select></label></div><label>Participants<input value={form.participants} onChange={(event) => setForm({ ...form, participants: event.target.value })} placeholder="TY, AB, NR or teammates" /></label><label>Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Add agenda, preparation links or what to bring." rows={3} /></label>{isEndBeforeStart && <p className="form-error">End time must be later than the start time.</p>}<div className="modal-actions">{editingEventId && <button className="ghost-button danger-action" onClick={() => removeEvent(editingEventId)} type="button">Delete event</button>}<button className="primary-button" disabled={!canSaveEvent} type="submit"><Plus size={18} /> {editingEventId ? 'Save changes' : 'Save event'}</button></div></motion.form></motion.div>}</AnimatePresence>
     </div>
   )
 }
@@ -2361,7 +2688,7 @@ function StudyPage() {
   async function onFileChange(fileList: FileList | null) {
     if (!fileList?.length) return
     setIsUploading(true)
-    setStatusMessage(`Uploading ${fileList.length} file(s) through the R2 signed-upload flow...`)
+    setStatusMessage(`Uploading ${fileList.length} file(s) to your study library...`)
     const uploaded: StudyUpload[] = []
     for (const file of Array.from(fileList)) {
       const result = await uploadStudyFile(file, profile)
@@ -2372,8 +2699,8 @@ function StudyPage() {
     const pendingCount = uploaded.length - uploadedCount
     setStatusMessage(
       pendingCount
-        ? `${uploadedCount} uploaded, ${pendingCount} queued as pending until the Worker R2 binding is deployed.`
-        : `${uploadedCount} file(s) uploaded to R2.`,
+        ? `${uploadedCount} uploaded, ${pendingCount} saved locally and waiting to finish syncing.`
+        : `${uploadedCount} file(s) uploaded successfully.`,
     )
     setIsUploading(false)
   }
@@ -2388,10 +2715,10 @@ function StudyPage() {
       <section className="study-grid">
         <div className="section-card upload-drop">
           <UploadCloud size={42} />
-          <h2>R2 study uploads</h2>
+          <h2>Study uploads</h2>
           <p>
-            Files now go through a Worker-compatible signed upload flow: presign, PUT bytes, then finalize metadata.
-            If the deployed Worker does not have the R2 binding yet, the file is clearly marked pending instead of pretending it uploaded.
+            Add PDFs, notes and textbooks to keep your course materials close while you study.
+            Uploads are marked clearly while they sync.
           </p>
           <label className="primary-button">
             {isUploading ? 'Uploading...' : 'Choose files'}
@@ -2418,10 +2745,9 @@ function StudyPage() {
                     <strong>{file.name}</strong>
                     <span>{formatBytes(file.size)} saved {new Date(file.createdAt).toLocaleDateString()}</span>
                     <span className={cx('upload-badge', file.status ?? 'pending_upload')}>
-                      {file.status === 'uploaded' ? 'Uploaded to R2' : file.status === 'failed' ? 'Failed' : 'Pending Worker/R2'}
+                      {file.status === 'uploaded' ? 'Synced' : file.status === 'failed' ? 'Failed' : 'Sync pending'}
                     </span>
-                    {file.objectKey && <code>{file.objectKey}</code>}
-                    {file.error && <small>{file.error}</small>}
+                    {file.error && <small>Could not finish syncing. Try again later.</small>}
                   </div>
                   <div className="file-actions">
                     {file.url && <a href={file.url} target="_blank" rel="noreferrer">Open</a>}
@@ -2438,45 +2764,555 @@ function StudyPage() {
 }
 
 function HubPage() {
-  const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
-  const totalAnswered = attempts.reduce((sum, attempt) => sum + attempt.total, 0)
-  const totalCorrect = attempts.reduce((sum, attempt) => sum + attempt.score, 0)
+  const firebaseUser = useFirebaseUser()
+  const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
+  const [stats, setStats] = useState<Record<string, CourseStats>>({})
+  const [mastery, setMastery] = useState<MasteryRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  // Local attempts from localStorage (always available)
+  const localAttempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
+  const courseTitleMap: Record<string, string> = {}
+  localAttempts.forEach((a) => { courseTitleMap[a.courseCode] = a.courseTitle })
+
+  useEffect(() => {
+    if (!userId) {
+      setLoading(false)
+      return
+    }
+    let active = true
+    setLoading(true)
+    Promise.all([
+      getUserStats(userId),
+      getUserMastery(userId),
+    ]).then(([s, m]) => {
+      if (!active) return
+      setStats(s.courses ?? {})
+      setMastery(m.topics ?? [])
+      setLoading(false)
+    }).catch(() => {
+      if (!active) return
+      setError('Failed to load progress data')
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [userId])
+
+  // Aggregate local quiz data by course
+  const localCourseStats: Record<string, { attempts: number; correct: number; total: number; lastAttempt: string }> = {}
+  localAttempts.forEach((a) => {
+    if (!localCourseStats[a.courseCode]) {
+      localCourseStats[a.courseCode] = { attempts: 0, correct: 0, total: 0, lastAttempt: a.createdAt }
+    }
+    localCourseStats[a.courseCode].attempts++
+    localCourseStats[a.courseCode].correct += a.score
+    localCourseStats[a.courseCode].total += a.total
+    if (a.createdAt > localCourseStats[a.courseCode].lastAttempt) {
+      localCourseStats[a.courseCode].lastAttempt = a.createdAt
+    }
+  })
+
+  const totalAnswered = localAttempts.reduce((sum, a) => sum + a.total, 0)
+  const totalCorrect = localAttempts.reduce((sum, a) => sum + a.score, 0)
   const average = totalAnswered ? Math.round((totalCorrect / totalAnswered) * 100) : 0
-  const best = attempts.slice().sort((a, b) => b.score / b.total - a.score / a.total)[0]
+  const streakStats = getStreakStats(localAttempts)
+
+  // Server-side aggregates
+  const totalKcs = Object.values(stats).reduce((sum, s) => sum + s.totalKcs, 0)
+  const masteredKcs = Object.values(stats).reduce((sum, s) => sum + s.masteredKcs, 0)
+  const serverTotalAttempts = Object.values(stats).reduce((sum, s) => sum + s.totalAttempts, 0)
+  const avgMastery = totalKcs > 0 ? Math.round((masteredKcs / totalKcs) * 100) : 0
+
+  function masteryColor(prob: number) {
+    if (prob >= 0.75) return 'mastery-high'
+    if (prob >= 0.5) return 'mastery-mid'
+    return 'mastery-low'
+  }
 
   return (
     <div className="page-stack">
       <PageHeader eyebrow="Progress" title="Hub" />
-      <section className="metrics-grid">
-        <MetricCard icon={<BarChart3 />} label="Average score" value={`${average}%`} hint="Across saved attempts" />
-        <MetricCard icon={<BrainCircuit />} label="Questions answered" value={totalAnswered} hint="Multiple choice mode" />
-        <MetricCard icon={<Flame />} label="Study streak" value="1" hint="Demo streak active" />
-        <MetricCard icon={<Target />} label="Best course" value={best?.courseCode ?? 'None'} hint={best ? `${best.score}/${best.total}` : 'Attempt a quiz'} />
-      </section>
-      <section className="section-card">
-        <div className="section-title">
-          <h2>Recent activity</h2>
-          <Link to="/app/courses">Take a quiz</Link>
-        </div>
-        {attempts.length === 0 ? (
-          <EmptyState icon={<LineChart />} title="No quiz attempts yet" body="Complete a course quiz and this hub will show performance trends." />
-        ) : (
-          <div className="attempt-list">
-            {attempts.slice(0, 8).map((attempt) => (
-              <article key={attempt.id}>
-                <div>
-                  <strong>{attempt.courseCode}</strong>
-                  <span>{attempt.courseTitle}</span>
+      {loading && <LoadingState label="Loading your progress..." />}
+      {error && !loading && <ErrorState message={error} />}
+      {!loading && !error && (
+        <>
+          {/* Summary metrics */}
+          <section className="metrics-grid">
+            <MetricCard icon={<BarChart3 />} label="Average score" value={`${average}%`} hint="Across all quizzes" />
+            <MetricCard icon={<BrainCircuit />} label="Questions answered" value={totalAnswered} hint="Total questions" />
+            <MetricCard icon={<Flame />} label="Study streak" value={streakStats.currentStreak} hint={streakStats.completedToday ? 'Completed today' : 'Take a quiz today'} to="/app/streaks" />
+            <MetricCard icon={<Target />} label="Quiz sessions" value={localAttempts.length} hint="Quizzes completed" />
+            <MetricCard icon={<GraduationCap />} label="Courses studied" value={Object.keys(localCourseStats).length} hint="Unique courses" />
+          </section>
+
+          {/* Server-side mastery summary (if available) */}
+          {userId && totalKcs > 0 && (
+            <section className="section-card">
+              <div className="section-title">
+                <h2>Mastery overview</h2>
+                <span className="score-chip">{avgMastery}% avg</span>
+              </div>
+              <div className="mastery-summary-row">
+                <div className="mastery-summary-stat">
+                  <span className="mastery-summary-value">{masteredKcs}</span>
+                  <span className="mastery-summary-label">Topics mastered</span>
                 </div>
-                <div className="bar-track">
-                  <span style={{ width: `${Math.round((attempt.score / attempt.total) * 100)}%` }} />
+                <div className="mastery-summary-stat">
+                  <span className="mastery-summary-value">{totalKcs}</span>
+                  <span className="mastery-summary-label">Total topics</span>
                 </div>
-                <b>{attempt.score}/{attempt.total}</b>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+                <div className="mastery-summary-stat">
+                  <span className="mastery-summary-value">{serverTotalAttempts}</span>
+                  <span className="mastery-summary-label">Adaptive attempts</span>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {!userId && localAttempts.length > 0 && (
+            <div className="section-card" style={{ padding: '0.8rem 1.2rem' }}>
+              <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+                <Link to="/app/profile" style={{ color: 'var(--primary)', fontWeight: 600 }}>Sign in</Link> to unlock adaptive mastery tracking and save progress across devices.
+              </p>
+            </div>
+          )}
+
+          {/* Course performance breakdown (from localStorage) */}
+          {Object.keys(localCourseStats).length > 0 && (
+            <section className="section-card">
+              <div className="section-title">
+                <h2>Course performance</h2>
+              </div>
+              <div className="mastery-table">
+                <div className="mastery-table-header">
+                  <span>Course</span>
+                  <span>Score</span>
+                  <span>Quizzes</span>
+                  <span>Questions</span>
+                  <span>Last active</span>
+                </div>
+                {Object.entries(localCourseStats)
+                  .sort(([, a], [, b]) => (b.correct / b.total) - (a.correct / a.total))
+                  .map(([code, data]) => {
+                    const pct = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0
+                    return (
+                      <Link className="mastery-table-row analytics-link-row" key={code} to={`/app/hub/${encodeURIComponent(code)}`}>
+                        <div className="mastery-course">
+                          <strong>{code}</strong>
+                          <span>{courseTitleMap[code] || code}</span>
+                        </div>
+                        <div className="mastery-bar-cell">
+                          <div className="mastery-bar">
+                            <span className={cx('mastery-bar-fill', pct >= 75 ? 'mastery-high' : pct >= 50 ? 'mastery-mid' : 'mastery-low')} style={{ width: `${pct}%` }} />
+                          </div>
+                          <span>{pct}%</span>
+                        </div>
+                        <span>{data.attempts}</span>
+                        <span>{data.correct}/{data.total}</span>
+                        <span>{data.lastAttempt ? new Date(data.lastAttempt).toLocaleDateString() : '—'}</span>
+                      </Link>
+                    )
+                  })}
+              </div>
+            </section>
+          )}
+
+          {/* Server-side topic mastery (if available) */}
+          {userId && mastery.length > 0 && (() => {
+            const now = new Date()
+            const overdueTopics = mastery.filter((t) => {
+              if (!t.next_review_due) return false
+              return new Date(t.next_review_due) <= now
+            })
+            const fragileTopics = mastery.filter((t) => t.s_parameter < 1.5 && t.status === 'reviewing')
+            const stableTopics = mastery.filter((t) => t.s_parameter >= 2.0 && t.status === 'reviewing')
+
+            return (
+              <>
+                {/* Review schedule alerts */}
+                {(overdueTopics.length > 0 || fragileTopics.length > 0) && (
+                  <section className="section-card review-alerts">
+                    <div className="section-title">
+                      <h2>Retention alerts</h2>
+                    </div>
+                    {overdueTopics.length > 0 && (
+                      <div className="review-alert-group">
+                        <h3 className="review-alert-heading review-overdue">
+                          <TimerReset size={14} />
+                          Overdue for review ({overdueTopics.length})
+                        </h3>
+                        <p className="review-alert-desc">These topics are past their review date. Practice now to prevent forgetting.</p>
+                        <div className="review-topic-chips">
+                          {overdueTopics.slice(0, 8).map((t) => (
+                            <Link
+                              to={`/app/courses/${encodeURIComponent(t.course_code)}/quiz?topic=${encodeURIComponent(t.topic_name)}`}
+                              className="review-topic-chip overdue"
+                              key={`${t.course_code}-${t.topic_name}`}
+                            >
+                              <span className="review-chip-code">{t.course_code}</span>
+                              <span className="review-chip-name">{t.topic_name}</span>
+                              <span className="review-chip-date">{new Date(t.next_review_due).toLocaleDateString()}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {fragileTopics.length > 0 && (
+                      <div className="review-alert-group">
+                        <h3 className="review-alert-heading review-fragile">
+                          <AlertCircle size={14} />
+                          Fragile memory ({fragileTopics.length})
+                        </h3>
+                        <p className="review-alert-desc">Low stability — these topics are at risk of being forgotten soon.</p>
+                        <div className="review-topic-chips">
+                          {fragileTopics.slice(0, 8).map((t) => (
+                            <Link
+                              to={`/app/courses/${encodeURIComponent(t.course_code)}/quiz?topic=${encodeURIComponent(t.topic_name)}`}
+                              className="review-topic-chip fragile"
+                              key={`${t.course_code}-${t.topic_name}`}
+                            >
+                              <span className="review-chip-code">{t.course_code}</span>
+                              <span className="review-chip-name">{t.topic_name}</span>
+                              <span className="review-chip-stability">Stability: {t.s_parameter.toFixed(1)}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {/* Full topic mastery list */}
+                <section className="section-card">
+                  <div className="section-title">
+                    <h2>Topic mastery</h2>
+                    <span className="score-chip">{mastery.length} topics</span>
+                  </div>
+                  <div className="topic-mastery-list">
+                    {mastery
+                      .sort((a, b) => a.mastery_prob - b.mastery_prob)
+                      .slice(0, 10)
+                      .map((t) => {
+                        const isOverdue = t.next_review_due && new Date(t.next_review_due) <= now
+                        const isFragile = t.s_parameter < 1.5
+                        const daysSinceLastAttempt = t.last_attempt_at
+                          ? Math.floor((now.getTime() - new Date(t.last_attempt_at).getTime()) / (1000 * 60 * 60 * 24))
+                          : null
+
+                        return (
+                          <article className={cx('topic-mastery-item', isOverdue && 'overdue', isFragile && 'fragile')} key={`${t.course_code}-${t.topic_name}`}>
+                            <div className="topic-mastery-info">
+                              <strong>{t.topic_name}</strong>
+                              <span>{t.course_code}</span>
+                            </div>
+                            <div className="topic-mastery-bar-wrap">
+                              <div className="topic-mastery-bar">
+                                <span className={cx('mastery-bar-fill', masteryColor(t.mastery_prob))} style={{ width: `${Math.round(t.mastery_prob * 100)}%` }} />
+                              </div>
+                              <span className={cx('status-badge', t.status === 'reviewing' ? 'status-reviewing' : 'status-learning')}>
+                                {t.status === 'reviewing' ? 'Reviewing' : 'Learning'}
+                              </span>
+                            </div>
+                            <div className="topic-mastery-meta">
+                              <span>{t.correct_attempts}/{t.total_attempts} correct</span>
+                              <span className={cx('stability-indicator', isFragile ? 'stability-fragile' : t.s_parameter >= 2.0 ? 'stability-strong' : 'stability-moderate')}>
+                                Stability: {t.s_parameter.toFixed(1)}
+                              </span>
+                              {daysSinceLastAttempt !== null && (
+                                <span className={cx('recency', daysSinceLastAttempt > 7 && 'recency-stale')}>
+                                  {daysSinceLastAttempt === 0 ? 'Today' : `${daysSinceLastAttempt}d ago`}
+                                </span>
+                              )}
+                              {t.next_review_due && (
+                                <span className={cx('review-due', isOverdue && 'review-overdue')}>
+                                  {isOverdue ? 'Overdue' : `Review: ${new Date(t.next_review_due).toLocaleDateString()}`}
+                                </span>
+                              )}
+                            </div>
+                          </article>
+                        )
+                      })}
+                  </div>
+                </section>
+
+                {/* Strong retention stats */}
+                {stableTopics.length > 0 && (
+                  <section className="section-card">
+                    <div className="section-title">
+                      <h2>Strong retention</h2>
+                      <span className="score-chip">{stableTopics.length} topics</span>
+                    </div>
+                    <p className="section-hint">Topics with high stability — you're unlikely to forget these soon.</p>
+                    <div className="topic-mastery-list">
+                      {stableTopics
+                        .sort((a, b) => b.s_parameter - a.s_parameter)
+                        .slice(0, 5)
+                        .map((t) => (
+                          <article className="topic-mastery-item strong" key={`${t.course_code}-${t.topic_name}`}>
+                            <div className="topic-mastery-info">
+                              <strong>{t.topic_name}</strong>
+                              <span>{t.course_code}</span>
+                            </div>
+                            <div className="topic-mastery-bar-wrap">
+                              <div className="topic-mastery-bar">
+                                <span className="mastery-bar-fill mastery-high" style={{ width: `${Math.round(t.mastery_prob * 100)}%` }} />
+                              </div>
+                              <span className="status-badge status-reviewing">Reviewing</span>
+                            </div>
+                            <div className="topic-mastery-meta">
+                              <span className="stability-indicator stability-strong">Stability: {t.s_parameter.toFixed(1)}</span>
+                              <span>{t.correct_attempts}/{t.total_attempts} correct</span>
+                            </div>
+                          </article>
+                        ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            )
+          })()}
+
+          {/* Recent quiz history (from localStorage) */}
+          {localAttempts.length > 0 && (
+            <section className="section-card">
+              <div className="section-title">
+                <h2>Recent quizzes</h2>
+                <Link to="/app/courses">Take a quiz</Link>
+              </div>
+              <div className="attempt-list">
+                {localAttempts.slice(0, 8).map((attempt) => (
+                  <article key={attempt.id}>
+                    <div>
+                      <strong>{attempt.courseCode}</strong>
+                      <span>{attempt.courseTitle} · {attempt.mode ?? 'multiple-choice'}</span>
+                    </div>
+                    <div className="bar-track">
+                      <span style={{ width: `${Math.round((attempt.score / attempt.total) * 100)}%` }} />
+                    </div>
+                    <b>{attempt.score}/{attempt.total}</b>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {localAttempts.length === 0 && (
+            <EmptyState
+              icon={<LineChart />}
+              title="No quiz data yet"
+              body="Complete a course quiz and your progress will appear here."
+            />
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function StreaksPage() {
+  const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
+  const stats = getStreakStats(attempts)
+  const [tab, setTab] = useState<'personal' | 'friends'>('personal')
+  const latestAttempt = attempts[0]
+  const quizTarget = latestAttempt ? `/app/courses/${encodeURIComponent(latestAttempt.courseCode)}/quiz` : '/app/courses'
+
+  return (
+    <div className="page-stack narrow streaks-page">
+      <Link className="back-link" to="/app">
+        <ArrowLeft size={18} /> Back to dashboard
+      </Link>
+      <PageHeader title="Streaks" />
+      <div className="streak-tabs" role="tablist" aria-label="Streak views">
+        <button className={cx(tab === 'personal' && 'active')} onClick={() => setTab('personal')} type="button">
+          PERSONAL
+        </button>
+        <button className={cx(tab === 'friends' && 'active')} onClick={() => setTab('friends')} type="button">
+          FRIENDS
+        </button>
+      </div>
+
+      {tab === 'personal' ? (
+        <>
+          <section className={cx('streak-hero-card', !stats.completedToday && 'needs-action')}>
+            <div className="streak-number-block">
+              <span>STREAKS HUB</span>
+              <strong>{stats.currentStreak}</strong>
+              <p>day streak!</p>
+            </div>
+            <Flame className="streak-fire" />
+          </section>
+
+          <section className="streak-cta-card">
+            <div className="streak-clock">
+              <TimerReset size={34} />
+            </div>
+            <div>
+              <h2>{stats.completedToday ? 'Today is covered' : 'Keep your streak alive'}</h2>
+              <p>{stats.completedToday ? 'Come back tomorrow and keep the chain going.' : 'Jump back into the Hub for a quick quiz before the day ends.'}</p>
+              <Link to={quizTarget}>DO YOUR QUIZ</Link>
+            </div>
+          </section>
+
+          <section className="streak-calendar-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Study calendar</p>
+                <h2>{stats.completedInWindow}/{STREAK_WINDOW_DAYS} days completed</h2>
+              </div>
+            </div>
+            <div className="streak-calendar-grid">
+              {stats.days.map((day) => (
+                <div className={cx('streak-day', day.completed && 'completed', day.isToday && 'today')} key={day.key}>
+                  <span>{day.date.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                  <strong>{day.date.getDate()}</strong>
+                  <small>{day.completed ? 'Done' : day.isToday ? 'Today' : 'Open'}</small>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="state-card streak-friends-card">
+          <Users size={52} />
+          <h3>Friends streaks coming soon</h3>
+          <p>Keep building your personal rhythm. Friend comparisons can come after the core learning flow feels solid.</p>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function CourseAnalyticsPage() {
+  const { code = '' } = useParams()
+  const courseCode = decodeURIComponent(code)
+  const navigate = useNavigate()
+  const firebaseUser = useFirebaseUser()
+  const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
+  const [mastery, setMastery] = useState<MasteryRecord[]>([])
+  const [attempts, setAttempts] = useState<AttemptRecord[]>([])
+  const [loading, setLoading] = useState(Boolean(userId))
+  const [error, setError] = useState('')
+
+  const localAttempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, []).filter((attempt) => attempt.courseCode === courseCode)
+  const title = localAttempts[0]?.courseTitle || courseCode
+
+  useEffect(() => {
+    if (!userId || !courseCode) {
+      setLoading(false)
+      return
+    }
+    let active = true
+    setLoading(true)
+    setError('')
+    Promise.all([
+      getUserMasteryForCourse(userId, courseCode),
+      getUserAttempts(userId, { course: courseCode, limit: 200 }),
+    ]).then(([courseMastery, attemptHistory]) => {
+      if (!active) return
+      setMastery(courseMastery.topics ?? [])
+      setAttempts(attemptHistory.attempts ?? [])
+      setLoading(false)
+    }).catch(() => {
+      if (!active) return
+      setError('Failed to load course analytics')
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [courseCode, userId])
+
+  const orderedAttempts = [...attempts].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  const totalQuestions = attempts.length || localAttempts.reduce((sum, attempt) => sum + attempt.total, 0)
+  const correctQuestions = attempts.length
+    ? attempts.filter((attempt) => Boolean(attempt.is_correct)).length
+    : localAttempts.reduce((sum, attempt) => sum + attempt.score, 0)
+  const accuracy = totalQuestions ? Math.round((correctQuestions / totalQuestions) * 100) : 0
+  const avgMastery = mastery.length ? Math.round((mastery.reduce((sum, topic) => sum + topic.mastery_prob, 0) / mastery.length) * 100) : 0
+  const masteredTopics = mastery.filter((topic) => topic.status === 'reviewing').length
+  const strongestTopics = [...mastery].sort((a, b) => b.mastery_prob - a.mastery_prob).slice(0, 6)
+  const weakestTopics = [...mastery].sort((a, b) => a.mastery_prob - b.mastery_prob).slice(0, 6)
+  const progressPoints = orderedAttempts.map((attempt, index) => ({
+    label: new Date(attempt.created_at).toLocaleDateString(),
+    value: Math.round(attempt.mastery_after * 100),
+    before: Math.round(attempt.mastery_before * 100),
+    index: index + 1,
+  }))
+  const polyline = progressPoints.map((point, index) => {
+    const x = progressPoints.length === 1 ? 50 : (index / (progressPoints.length - 1)) * 100
+    const y = 100 - point.value
+    return `${x},${y}`
+  }).join(' ')
+  const topicBars = (strongestTopics.length ? strongestTopics : weakestTopics).slice(0, 8)
+
+  return (
+    <div className="page-stack">
+      <button className="ghost-button inline-back" onClick={() => navigate('/app/hub')}><ArrowLeft size={16} /> Back to Hub</button>
+      <PageHeader eyebrow="Course analytics" title={title}>Detailed adaptive learning progress, mastery movement, strengths, and topics that need attention.</PageHeader>
+      {loading && <LoadingState label="Loading course analytics..." />}
+      {error && !loading && <ErrorState message={error} />}
+      {!loading && !error && (
+        <>
+          <section className="metrics-grid">
+            <MetricCard icon={<Target />} label="Accuracy" value={`${accuracy}%`} hint={`${correctQuestions}/${totalQuestions} correct`} />
+            <MetricCard icon={<BrainCircuit />} label="Adaptive mastery" value={`${avgMastery}%`} hint={`${masteredTopics}/${mastery.length} topics reviewing`} />
+            <MetricCard icon={<BarChart3 />} label="Answer events" value={attempts.length || totalQuestions} hint={attempts.length ? 'Synced adaptive attempts' : 'Local quiz questions'} />
+            <MetricCard icon={<CalendarDays />} label="Quiz sessions" value={localAttempts.length} hint="Completed on this device" />
+          </section>
+
+          <section className="section-card">
+            <div className="section-title">
+              <h2>Progress over time</h2>
+              <span className="score-chip">{progressPoints.length} answers</span>
+            </div>
+            {progressPoints.length > 0 ? (
+              <div className="progress-chart-card">
+                <svg className="progress-line-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Mastery progress line chart">
+                  <polyline className="progress-line-area" points={`0,100 ${polyline} 100,100`} />
+                  <polyline className="progress-line" points={polyline} />
+                </svg>
+                <div className="progress-chart-labels">
+                  <span>{progressPoints[0]?.label}</span>
+                  <span>{progressPoints.at(-1)?.label}</span>
+                </div>
+              </div>
+            ) : (
+              <EmptyState icon={<LineChart />} title="No adaptive answer history yet" body="Complete a signed-in multiple-choice quiz to see mastery change after each answer." />
+            )}
+          </section>
+
+          <section className="analytics-two-column">
+            <div className="section-card">
+              <div className="section-title"><h2>Strengths bar chart</h2></div>
+              <div className="topic-bar-chart">
+                {topicBars.map((topic) => {
+                  const pct = Math.round(topic.mastery_prob * 100)
+                  return (
+                    <div className="topic-bar-row" key={`${topic.course_code}-${topic.topic_name}`}>
+                      <span>{topic.topic_name}</span>
+                      <div className="topic-bar-track"><b style={{ width: `${pct}%` }} /></div>
+                      <strong>{pct}%</strong>
+                    </div>
+                  )
+                })}
+                {topicBars.length === 0 && <p className="section-hint">No topic mastery has been synced for this course yet.</p>}
+              </div>
+            </div>
+
+            <div className="section-card">
+              <div className="section-title"><h2>Needs attention</h2></div>
+              <div className="topic-mastery-list">
+                {weakestTopics.map((topic) => (
+                  <article className="topic-mastery-item fragile" key={`${topic.course_code}-${topic.topic_name}`}>
+                    <div className="topic-mastery-info"><strong>{topic.topic_name}</strong><span>{topic.correct_attempts}/{topic.total_attempts} correct</span></div>
+                    <div className="topic-mastery-bar"><span className={cx('mastery-bar-fill', topic.mastery_prob >= 0.75 ? 'mastery-high' : topic.mastery_prob >= 0.5 ? 'mastery-mid' : 'mastery-low')} style={{ width: `${Math.round(topic.mastery_prob * 100)}%` }} /></div>
+                  </article>
+                ))}
+                {weakestTopics.length === 0 && <p className="section-hint">More adaptive attempts will identify weak topics and review priorities.</p>}
+              </div>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   )
 }
@@ -2699,7 +3535,7 @@ function ProfilePage() {
 function NotFoundPage() {
   return (
     <div className="page-stack narrow">
-      <EmptyState icon={<AlertCircle />} title="Page not found" body="The route is not part of the React migration shell yet." />
+      <EmptyState icon={<AlertCircle />} title="Page not found" body="This page is not available in Vens Hub yet." />
       <Link className="primary-button" to="/app">Back home</Link>
     </div>
   )
@@ -2732,6 +3568,8 @@ function App() {
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="study" element={<StudyPage />} />
             <Route path="hub" element={<HubPage />} />
+            <Route path="hub/:code" element={<CourseAnalyticsPage />} />
+            <Route path="streaks" element={<StreaksPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>

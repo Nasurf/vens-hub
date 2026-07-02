@@ -40,6 +40,12 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 
+# Generated Flutter platform shells not used by the web hackathon build
+/ios/
+/linux/
+/macos/
+/windows/
+
 # IDE
 .idea/
 .vscode/
@@ -89,3 +95,4 @@ lib/firebase_options.dart
 BANK/
 BANK/.upload_checkpoint.json
 lib/core/config/environment_config.dart
+workers/api/vens-hub-questions-backup.sql
