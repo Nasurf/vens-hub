@@ -5011,6 +5011,10 @@ textarea:focus {
   }
 
   .topic-mastery-item {
+    transition: none;
+  }
+}
+
 /* ─── Flashcards ──────────────────────────────────────────────────────────── */
 
 .flashcards-stats-row {
@@ -5155,6 +5159,9 @@ textarea:focus {
 @media (max-width: 640px) {
   .metrics-grid .metric-card:first-child strong {
     font-size: 1.75rem;
+  }
+}
+
 /* Feed container with scroll snap */
 .flashcard-feed {
   display: grid;

@@ -26,7 +26,6 @@ import {
   ClipboardList,
   Eye,
   EyeOff,
-  FileText,
   Flame,
   GraduationCap,
   Home,
@@ -54,8 +53,6 @@ import {
   Trash2,
   Trophy,
   MapPin,
-  UploadCloud,
-  MoreVertical,
   Users,
   User,
   X,
@@ -1621,7 +1618,6 @@ function AppShell() {
   const userId = firebaseUser && firebaseUser !== 'loading' ? firebaseUser.uid : null
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
   useFlashcardDatabaseSync(userId)
   const navItems = [
     { to: '/app', label: 'Home', icon: <Home size={22} />, end: true },
@@ -3026,7 +3022,7 @@ Student answer: ${a.selectedAnswerText}
 Correct answer: ${a.correctAnswerText}
 The student originally got this ${a.isCorrect ? 'correct' : 'incorrect'}.
 Explain the concept clearly and briefly, then point out the key reasoning step.`
-      const answer = await askAssistant(prompt, `Flashcard review for ${a.courseCode}`)
+      const answer = await askAssistant([{ id: crypto.randomUUID(), role: 'user', text: prompt }], `Flashcard review for ${a.courseCode}`)
       setAiExplanation(answer)
     } catch {
       setAiError('Could not get AI explanation. Try again later.')
