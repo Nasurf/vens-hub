@@ -864,8 +864,6 @@ function MobileLanding() {
       
       <div className="mobile-landing-top">
         <Logo />
-        <h1>Engineering Hub</h1>
-        <div className="title-underline" />
         <div className="scrolling-message">
           <p key={msgIdx}>{messages[msgIdx]}</p>
         </div>
