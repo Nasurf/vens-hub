@@ -1664,7 +1664,7 @@ function AIAssistantPanel({ open, onClose, context, systemPrompt }: { open: bool
           {messages.map((message) => (
             <article className={cx('assistant-message', message.role, message.isError && 'error')} key={message.id}>
               <span>{message.role === 'assistant' ? <Bot size={16} /> : <User size={16} />}</span>
-              <p>{message.text}</p>
+              <p><LatexText text={message.text} /></p>
             </article>
           ))}
           {isLoading && (
@@ -2332,6 +2332,14 @@ Adjust depth based on what the student asks. If they ask a narrow question, give
 **Off-topic** ("What time is it?", "Tell me a joke"): One sentence redirect: "I can help with [subject] concepts — what would you like to understand?" Then move on.
 
 **App/meta questions** ("How do I use this?"): Brief, helpful answer about the feature, then redirect to the subject.
+
+## Formatting: LaTeX Notation
+Use LaTeX notation for all mathematical expressions:
+- Inline math: wrap in single dollar signs — `$V = IR$`, `$P = VI\cos\phi$`
+- Display math (equations on their own line): wrap in double dollar signs — `$$I = \frac{V}{R}$$`
+- Use standard LaTeX commands: `\frac{}{}`, `\sqrt{}`, `\sum`, `\int`, `\alpha`, `\beta`, `\theta`, `\omega`, `\Delta`, `\nabla`, `\partial`, `\cdot`, `\times`, `\leq`, `\geq`, `\neq`, `\approx`, `\infty`
+- Do NOT use LaTeX for plain text, headings, or bullet points — only for math
+- Do NOT wrap entire sentences in `$` — only wrap the mathematical expression itself
 
 ## The Rules
 
