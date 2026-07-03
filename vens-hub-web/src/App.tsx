@@ -3102,7 +3102,7 @@ Explain the concept clearly and briefly, then point out the key reasoning step.`
     const dx = e.touches[0].clientX - touchStartX.current
     const dy = e.touches[0].clientY - touchStartY.current
     // Only trigger for horizontal swipes (dx > dy)
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 20) {
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
       setSwipeDir(dx > 0 ? 'right' : 'left')
     } else {
       setSwipeDir(null)
@@ -3121,7 +3121,7 @@ Explain the concept clearly and briefly, then point out the key reasoning step.`
 
   return (
     <article
-      className={cx('flashcard-card', swipeDir && `swiping-${swipeDir}`)}
+      className={`flashcard-card${swipeDir ? ` swiping-${swipeDir}` : ''}`}
       data-card-index={index}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
