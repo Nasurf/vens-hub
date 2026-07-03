@@ -1252,6 +1252,20 @@ function RegisterPage() {
   return (
     <PublicShell>
       <section className="signup-grid">
+        <div className="mobile-progress-bar" role="progressbar" aria-valuenow={step + 1} aria-valuemax={4} aria-label={`Step ${step + 1} of 4`}>
+          {step > 0 ? (
+            <button className="back-btn" onClick={() => setStep((s) => Math.max(0, s - 1))} aria-label="Go back">
+              <ArrowLeft size={20} />
+            </button>
+          ) : (
+            <Link to="/login" className="back-btn" aria-label="Go to login">
+              <ArrowLeft size={20} />
+            </Link>
+          )}
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${((step + 1) / 4) * 100}%` }} />
+          </div>
+        </div>
         <aside className="signup-progress">
           <Logo />
           <h1>Create Account</h1>

@@ -268,12 +268,13 @@ label {
 
 .desktop-only {}
 .mobile-landing { display: none; }
+.mobile-progress-bar { display: none; }
 
 .landing-grid,
 .auth-layout,
 .signup-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(420px, 1.05fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(min(420px, 100%), 1.05fr);
   min-height: calc(100vh - 4rem);
   overflow: hidden;
   border: 1px solid var(--line);
@@ -621,7 +622,8 @@ label {
   position: absolute;
   right: 0;
   top: 0;
-  width: 40px;
+  min-width: 48px;
+  min-height: 48px;
   transition: color 160ms ease-out;
 }
 
@@ -763,9 +765,9 @@ label {
   color: var(--muted);
   display: flex;
   font-weight: 800;
-  height: 34px;
+  height: 38px;
   justify-content: center;
-  width: 34px;
+  width: 38px;
 }
 
 .step-row.active,
@@ -4221,39 +4223,139 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .signup-form-panel {
-    padding: 1.25rem;
+  /* ─── Mobile Auth/Signup — card-based, centered (Flutter pattern) ─── */
+
+  .signup-grid {
+    grid-template-columns: 1fr;
+    min-height: 100vh;
   }
 
-  .step-panel {
-    gap: 1.5rem;
+  .signup-progress {
+    display: none;
+  }
+
+  /* Mobile progress bar — injected via TSX */
+  .mobile-progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .mobile-progress-bar .back-btn {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--ink);
+    display: grid;
+    height: 44px;
+    justify-items: center;
+    width: 44px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .mobile-progress-bar .back-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  .mobile-progress-bar .progress-track {
+    flex: 1;
+    height: 6px;
+    background: var(--surface);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .mobile-progress-bar .progress-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 999px;
+    transition: width 280ms var(--ease-out);
+  }
+
+  .signup-form-panel {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    min-height: calc(100vh - 58px);
+    padding: 1.5rem 1rem;
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+
+  /* Card wrapper — matches Flutter Card(surfaceContainerHighest, radius 16) */
+  .signup-form-panel .step-panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: clamp(1.25rem, 4vw, 1.75rem);
+    width: 100%;
+    max-width: 520px;
+    gap: clamp(1.25rem, 3vw, 1.75rem);
   }
 
   .speech-heading > span {
-    height: 46px;
-    width: 46px;
+    height: 44px;
+    width: 44px;
+    flex-shrink: 0;
+  }
+
+  .speech-heading h2 {
+    font-size: clamp(1.1rem, 3vw, 1.3rem);
   }
 
   .selection-grid {
     grid-template-columns: 1fr;
   }
 
+  .selection-grid button {
+    min-height: 52px;
+    padding: 0.85rem 1rem;
+  }
+
   .course-select-grid {
     grid-template-columns: 1fr;
+  }
+
+  .course-select-card {
+    min-height: 48px;
+    padding: 0.75rem 1rem;
   }
 
   .course-search-row {
     padding: 0.6rem 0.75rem;
   }
 
+  /* Bottom sticky CTA — matches Flutter ElevatedButton(height: 55, radius: 16) */
   .signup-actions {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 1.5rem;
+    width: 100%;
+    max-width: 520px;
+    position: sticky;
+    bottom: 0;
+    background: var(--card);
+    padding: 0.75rem 0;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
-  .signup-progress h1 {
-    font-size: 1.8rem;
-    margin-top: 2rem;
+  .signup-actions .ghost-button {
+    display: none;
+  }
+
+  .signup-actions .primary-button {
+    width: 100%;
+    min-height: 55px;
+    border-radius: 16px;
+    font-size: 1rem;
   }
 
   .step-row {
@@ -4267,8 +4369,85 @@ textarea:focus {
     font-size: 0.8rem;
   }
 
-  .speech-heading h2 {
-    font-size: 1.3rem;
+  /* ─── Mobile Auth card — matches Flutter MobileSignIn ─── */
+
+  .auth-layout {
+    grid-template-columns: 1fr;
+    min-height: 100vh;
+  }
+
+  .auth-visual {
+    display: none;
+  }
+
+  .auth-panel {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: clamp(1.5rem, 5vw, 2.5rem) 1.25rem;
+    padding-top: max(1.5rem, env(safe-area-inset-top));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+
+  .auth-panel .back-link {
+    align-self: flex-start;
+    margin-bottom: 1rem;
+  }
+
+  .auth-panel .logo-lockup {
+    margin-bottom: 1.25rem;
+  }
+
+  .auth-panel h1 {
+    font-size: clamp(1.5rem, 5vw, 2rem);
+    text-align: center;
+    margin-bottom: 0.35rem;
+  }
+
+  .auth-panel > p {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Card wrapper for auth form — matches Flutter Card(surfaceContainerHighest) */
+  .auth-form,
+  .step-fields {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: clamp(1.25rem, 4vw, 1.5rem);
+    width: 100%;
+    max-width: 480px;
+    gap: 1rem;
+  }
+
+  .auth-form input {
+    min-height: 48px;
+    padding-left: 2.8rem;
+    font-size: 16px;
+  }
+
+  .google-button {
+    min-height: 50px;
+    border-radius: 30px;
+    width: 100%;
+  }
+
+  .auth-divider {
+    margin: 1rem 0;
+  }
+
+  .primary-button {
+    min-height: 55px;
+    border-radius: 30px;
+    font-size: 1rem;
+  }
+
+  .auth-switch {
+    margin-top: 1rem;
+    text-align: center;
   }
 
   input, textarea, select {
