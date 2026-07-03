@@ -99,7 +99,7 @@ deploy.sh
 
 # IMPORTANT: Keep essential data directories for ChromaDB and caching
 # The following directories contain critical application data:
-# - OUTPUT_DATA2/emdeddings/ (ChromaDB collection with embeddings)
+# - OUTPUT_DATA2/embeddings/ (ChromaDB collection with embeddings)
 # - chromadb_storage/ (ChromaDB persistence layer)
 # - data/textbooks/ (Course data and configurations)
 # - data/exported_data/ (Processed document exports)
