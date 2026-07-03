@@ -1,0 +1,7 @@
+name = "vens-hub-web"
+compatibility_date = "2026-07-03"
+account_id = "a06481b3ed7ddcf617cc917bf38d39d4"
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"

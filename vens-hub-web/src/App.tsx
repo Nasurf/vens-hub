@@ -682,10 +682,10 @@ function PageHeader({
   title: string
   children?: ReactNode
 }) {
+  void eyebrow
   return (
     <header className="page-header">
       <div>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
       </div>
       {children}
@@ -1820,10 +1820,9 @@ function DashboardPage() {
         <BrandMark className="hub-hero-mark" label="Engineering Hub" />
       </section>
 
-      {/* Analytics — horizontal on mobile */}
+      {/* Analytics */}
       <div>
-        <p className="section-label">Analytics</p>
-        <div className="metrics-grid scrollable-mobile">
+        <div className="metrics-grid dashboard-metrics">
           <MetricCard icon={<GraduationCap />} label="My courses" value={selectedCourses.length} hint="Selected during setup" />
           <MetricCard icon={<BookOpen />} label="Questions answered" value={attempts.reduce((sum, a) => sum + a.total, 0)} hint="Across all quizzes" />
           <MetricCard icon={<Flame />} label="Study streak" value={streakStats.currentStreak} hint={streakStats.completedToday ? 'Completed today' : 'Take a quiz today'} to="/app/streaks" />
@@ -1938,7 +1937,7 @@ function CoursesPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Course catalog" title="Engineering courses" />
+      <PageHeader title="Engineering courses" />
       <section className="filter-bar">
         <label className="search-box">
           <Search size={18} />
@@ -2817,7 +2816,7 @@ function SchedulePage() {
   const [month, setMonth] = useState<Date>(new Date())
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => window.matchMedia('(max-width: 760px)').matches ? 'day' : 'week')
   const selectedDate = new Date(`${form.date}T00:00:00`)
   const weekStart = new Date(selectedDate)
   weekStart.setDate(selectedDate.getDate() - selectedDate.getDay() + 1)
@@ -2915,7 +2914,7 @@ function SchedulePage() {
 
   return (
     <div className="page-stack schedule-page">
-      <PageHeader eyebrow="Planner" title={`Stay up to date, ${firstName}`}>
+      <PageHeader title={`Stay up to date, ${firstName}`}>
         <div className="schedule-header-actions">
           <button className="primary-button" onClick={() => openAddModal()} type="button"><Plus size={18} /> Add event</button>
           <button className="ghost-button icon-only" onClick={() => selectDate(new Date())} type="button" aria-label="Jump to today"><RefreshCw size={18} /></button>
@@ -2926,7 +2925,7 @@ function SchedulePage() {
         <div className="schedule-toolbar">
           <div className="schedule-nav-row">
             <button className="ghost-button icon-only" onClick={() => navigateWeek(-1)} type="button" aria-label="Previous week"><ChevronLeft size={18} /></button>
-            <button className="schedule-range" type="button" onClick={() => selectDate(new Date())}>{format(weekDays[0], 'MMM d')}–{format(weekDays[6], 'd, yyyy')}</button>
+            <button className="schedule-range" type="button" onClick={() => selectDate(new Date())}>{format(weekDays[0], 'MMM d')} - {format(weekDays[6], 'd, yyyy')}</button>
             <button className="ghost-button icon-only" onClick={() => navigateWeek(1)} type="button" aria-label="Next week"><ChevronRight size={18} /></button>
           </div>
           <div className="schedule-view-tabs" role="tablist" aria-label="Schedule view">
@@ -2934,8 +2933,7 @@ function SchedulePage() {
           </div>
         </div>
         <div className="week-strip">
-          {viewMode === 'week' && <span className="week-corner">W</span>}
-          {(viewMode === 'day' ? weekDays.filter((d) => isSameDay(d, selectedDate)) : weekDays).map((day) => <button key={dateToIso(day)} className={cx('week-day-card', isSameDay(day, selectedDate) && 'selected', isToday(day) && 'today')} onClick={() => selectDate(day)} type="button"><span>{format(day, 'EEE')}</span><strong>{format(day, 'dd/MM')}</strong></button>)}
+          {weekDays.map((day) => <button key={dateToIso(day)} className={cx('week-day-card', isSameDay(day, selectedDate) && 'selected', isToday(day) && 'today')} onClick={() => selectDate(day)} type="button"><span>{format(day, 'EEE')}</span><strong>{format(day, 'dd/MM')}</strong></button>)}
         </div>
         <div className="schedule-week-scroll">
           <div className={cx('schedule-week-grid', viewMode === 'day' && 'day-view')}>
@@ -2971,7 +2969,7 @@ function SchedulePage() {
                           <strong>{item.title}</strong>
                           {item.venue && <small>{item.venue}</small>}
                           <div className="event-card-meta">
-                            <span><Clock3 size={12} /> {item.start}–{item.end}</span>
+                            <span><Clock3 size={12} /> {item.start} - {item.end}</span>
                             <button aria-label={`Delete ${item.title}`} onClick={() => removeEvent(item.id)} type="button"><X size={13} /></button>
                           </div>
                         </motion.article>
@@ -2987,7 +2985,7 @@ function SchedulePage() {
 
       <section className="schedule-lower-grid">
         <motion.div className="section-card calendar-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: 'easeOut' }}><DayPicker mode="single" selected={selectedDate} onDayClick={(date: Date) => { if (date) selectDate(date) }} month={month} onMonthChange={setMonth} showOutsideDays modifiers={modifiers} classNames={{ root: 'rdp-root', months: 'rdp-months', month_caption: 'rdp-month-caption', nav: 'rdp-nav', button_previous: 'rdp-nav-btn', button_next: 'rdp-nav-btn', month_grid: 'rdp-month-grid', weekdays: 'rdp-weekdays', weekday: 'rdp-weekday', day: 'rdp-day', day_button: 'rdp-day-btn', selected: 'rdp-selected', today: 'rdp-today', outside: 'rdp-outside' }} modifiersClassNames={{ 'has-events': 'rdp-has-events' }} /></motion.div>
-        <motion.section className="section-card agenda-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}><div className="section-title"><div><h2>{selectedDateLabel}</h2><p>{weekEvents.length} event{weekEvents.length === 1 ? '' : 's'} planned this week</p></div><span className="score-chip">{todaysEvents.length} today</span></div>{todaysEvents.length === 0 ? <EmptyState icon={<CalendarDays />} title="No saved events for this date" body="Use Add event to plan lectures, study blocks, reminders, venues and participants." /> : <div className="timeline-list"><AnimatePresence mode="popLayout">{todaysEvents.map((item, i) => <motion.article key={item.id} custom={i} variants={eventVariants} initial="hidden" animate="visible" exit="exit" layout><time>{item.start} – {item.end}</time><div><strong>{item.title}</strong><p>{item.course || item.type || 'Personal event'} {item.venue ? <><MapPin size={14} /> {item.venue}</> : ''}</p></div><div className="timeline-actions"><motion.button aria-label={`Edit ${item.title}`} onClick={() => openEditModal(item)} type="button" whileTap={{ scale: 0.9 }} transition={{ duration: 0.1 }}><Pencil size={16} /></motion.button><motion.button aria-label={`Delete ${item.title}`} onClick={() => removeEvent(item.id)} type="button" whileTap={{ scale: 0.9 }} transition={{ duration: 0.1 }}><X size={16} /></motion.button></div></motion.article>)}</AnimatePresence></div>}</motion.section>
+        <motion.section className="section-card agenda-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}><div className="section-title"><div><h2>{selectedDateLabel}</h2><p>{weekEvents.length} event{weekEvents.length === 1 ? '' : 's'} planned this week</p></div><span className="score-chip">{todaysEvents.length} today</span></div>{todaysEvents.length === 0 ? <EmptyState icon={<CalendarDays />} title="No saved events for this date" body="Use Add event to plan lectures, study blocks, reminders, venues and participants." /> : <div className="timeline-list"><AnimatePresence mode="popLayout">{todaysEvents.map((item, i) => <motion.article key={item.id} custom={i} variants={eventVariants} initial="hidden" animate="visible" exit="exit" layout><time>{item.start} - {item.end}</time><div><strong>{item.title}</strong><p>{item.course || item.type || 'Personal event'} {item.venue ? <><MapPin size={14} /> {item.venue}</> : ''}</p></div><div className="timeline-actions"><motion.button aria-label={`Edit ${item.title}`} onClick={() => openEditModal(item)} type="button" whileTap={{ scale: 0.9 }} transition={{ duration: 0.1 }}><Pencil size={16} /></motion.button><motion.button aria-label={`Delete ${item.title}`} onClick={() => removeEvent(item.id)} type="button" whileTap={{ scale: 0.9 }} transition={{ duration: 0.1 }}><X size={16} /></motion.button></div></motion.article>)}</AnimatePresence></div>}</motion.section>
       </section>
 
       <AnimatePresence>{isModalOpen && <motion.div className="schedule-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><motion.form className="schedule-modal section-card" onSubmit={saveEvent} initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.96 }} transition={{ duration: 0.25, ease: 'easeOut' }}><div className="modal-head"><div><p className="eyebrow">{editingEventId ? 'Edit schedule item' : 'New schedule item'}</p><h2>{editingEventId ? 'Edit event' : 'Add event menu'}</h2></div><button className="ghost-button icon-only" type="button" onClick={closeEventModal} aria-label="Close event form"><X size={18} /></button></div><label>Event title<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Power systems revision" required autoFocus /></label><div className="two-col"><label>Course or label<input value={form.course} onChange={(event) => setForm({ ...form, course: event.target.value })} placeholder="EEE 401" /></label><label>Venue<input value={form.venue} onChange={(event) => setForm({ ...form, venue: event.target.value })} placeholder="Engineering block, Room 312" /></label></div><div className="three-col schedule-time-fields"><label>Date<input value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} type="date" /></label><label>Start<input value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} type="time" /></label><label>End<input value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} type="time" /></label></div><div className="three-col"><label>Type<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Study block</option><option>Lecture</option><option>Quiz</option><option>Deadline</option><option>Group meeting</option></select></label><label>Priority<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}><option>Low</option><option>Medium</option><option>High</option></select></label><label>Reminder<select value={form.reminder} onChange={(event) => setForm({ ...form, reminder: event.target.value })}><option>None</option><option>15 minutes before</option><option>1 hour before</option><option>1 day before</option></select></label></div><label>Participants<input value={form.participants} onChange={(event) => setForm({ ...form, participants: event.target.value })} placeholder="TY, AB, NR or teammates" /></label><label>Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Add agenda, preparation links or what to bring." rows={3} /></label>{isEndBeforeStart && <p className="form-error">End time must be later than the start time.</p>}<div className="modal-actions">{editingEventId && <button className="ghost-button danger-action" onClick={() => removeEvent(editingEventId)} type="button">Delete event</button>}<button className="primary-button" disabled={!canSaveEvent} type="submit"><Plus size={18} /> {editingEventId ? 'Save changes' : 'Save event'}</button></div></motion.form></motion.div>}</AnimatePresence>
@@ -3238,7 +3236,7 @@ function FlashcardsPage() {
   if (deck.length === 0) {
     return (
       <div className="page-stack">
-        <PageHeader eyebrow="Review" title="Flashcards" />
+        <PageHeader title="Flashcards" />
         <EmptyState
           icon={<BrainCircuit />}
           title="No flashcards yet"
@@ -3251,7 +3249,7 @@ function FlashcardsPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Spaced review" title="Flashcards">
+      <PageHeader title="Flashcards">
         <span className="score-chip">{stats.dueNow} due</span>
       </PageHeader>
 
@@ -3370,7 +3368,7 @@ function HubPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Progress" title="Hub" />
+      <PageHeader title="Hub" />
       {loading && <LoadingState label="Loading your progress..." />}
       {error && !loading && <ErrorState message={error} />}
       {!loading && !error && (
