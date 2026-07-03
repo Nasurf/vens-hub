@@ -156,6 +156,7 @@ class _CompletionPageMobileState extends State<CompletionPageMobile>
         'topicName': topic ?? state.choosenTopic ?? 'General',
         'courseCode': state.course,
         'isCorrect': correct,
+        'questionId': int.tryParse(q.id) ?? null,
       });
     }
     if (results.isNotEmpty) {

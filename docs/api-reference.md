@@ -230,7 +230,7 @@ Submit a single question answer. Runs BKT update, persists attempt + mastery (if
 
 ### `POST /adaptive/submit-batch`
 
-Submit multiple topic-level results in one call (e.g. after a quiz). Does **not** require individual question IDs.
+Submit multiple topic-level results in one call (e.g. after a quiz). Each item can optionally include `questionId` for per-question tracking.
 
 **Headers:** `X-User-Id` (optional)
 
@@ -238,11 +238,20 @@ Submit multiple topic-level results in one call (e.g. after a quiz). Does **not*
 ```json
 {
   "results": [
-    { "topicName": "Sorting Algorithms", "courseCode": "CSC301", "isCorrect": true },
+    { "topicName": "Sorting Algorithms", "courseCode": "CSC301", "isCorrect": true, "questionId": 1234, "selectedAnswerIndex": 2 },
     { "topicName": "Graph Theory",        "courseCode": "CSC301", "isCorrect": false }
   ]
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `topicName` | string | yes | Topic knowledge component |
+| `courseCode` | string | yes | Course code |
+| `isCorrect` | boolean | yes | Whether the answer was correct |
+| `questionId` | int | no | Database question ID (enables per-question analytics) |
+| `selectedAnswerIndex` | int | no | Which option the student chose |
+| `elapsedSeconds` | int | no | Time spent on the question |
 
 **Response** `200`
 ```json

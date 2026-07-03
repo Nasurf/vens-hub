@@ -193,7 +193,7 @@ class AdaptiveService {
 
   /// Batch submit quiz results — accepts a list of per-topic answers.
   /// Used by the completion screen to sync quiz results to the server.
-  /// Each item: { topicName, courseCode, isCorrect }
+  /// Each item: { topicName, courseCode, isCorrect, questionId?, selectedAnswerIndex?, elapsedSeconds? }
   Future<int> submitBatch(
     String userId,
     List<Map<String, dynamic>> results,

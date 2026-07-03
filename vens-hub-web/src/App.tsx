@@ -2367,7 +2367,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
   const mcqQuestions = questions.filter((question) => questionOptions(question).length >= 2)
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
-  const [answers, setAnswers] = useState<Array<{ selected: number; correct: number; topicName: string; courseCode: string }>>([])
+  const [answers, setAnswers] = useState<Array<{ selected: number; correct: number; topicName: string; courseCode: string; questionId: number; selectedAnswerIndex: number }>>([])
   const [showResult, setShowResult] = useState(false)
   const [showExplanation, setShowExplanation] = useState(false)
   const [finished, setFinished] = useState(false)
@@ -2387,6 +2387,8 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
       correct: answerIndex(current),
       topicName: current.topic_name || 'General',
       courseCode: code,
+      questionId: Number(current.id) || 0,
+      selectedAnswerIndex: selected,
     }]
     setAnswers(next)
     setShowResult(true)
@@ -2436,6 +2438,8 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
           topicName: a.topicName,
           courseCode: a.courseCode,
           isCorrect: a.selected === a.correct,
+          questionId: a.questionId || undefined,
+          selectedAnswerIndex: a.selectedAnswerIndex,
         }))
         submitBatchResults(userId, batchResults)
           .then((result) => setAdaptiveResult({ synced: true, count: result.count }))
@@ -3114,157 +3118,154 @@ Explain the concept clearly and briefly, then point out the key reasoning step.`
   return (
     <>
       <article
-        className={`flashcard-card${isFlipped ? ' flipped' : ''}`}
+        className="flashcard-card"
         data-card-index={index}
-        onClick={handleFlip}
       >
-        <div className="flashcard-card-inner">
-          {/* === FRONT === */}
-          <div className="flashcard-face flashcard-face-front">
-            {index === 0 && !rated && (
-              <div className="flashcard-tap-hint">
-                Tap to reveal answer
-              </div>
-            )}
-            <div className="flashcard-card-header">
-              <div className="flashcard-meta">
-                <span className="flashcard-course">{a.courseCode}</span>
-                <span className="flashcard-topic">{a.topicName}</span>
-              </div>
-              <div className="flashcard-badges">
-                <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
-                  {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                  {a.isCorrect ? 'Correct' : 'Incorrect'}
-                </span>
-                <span className={cx('flashcard-strength-badge', strengthLabel.toLowerCase())}>
-                  {strengthLabel}
-                </span>
-              </div>
+        {/* === FRONT === */}
+        <div className={`flashcard-face flashcard-face-front${isFlipped ? ' hidden' : ''}`} onClick={handleFlip}>
+          {index === 0 && !rated && (
+            <div className="flashcard-tap-hint">
+              Tap to reveal answer
             </div>
-            <div className="flashcard-question">
-              <h3><LatexText text={a.questionText} /></h3>
+          )}
+          <div className="flashcard-card-header">
+            <div className="flashcard-meta">
+              <span className="flashcard-course">{a.courseCode}</span>
+              <span className="flashcard-topic">{a.topicName}</span>
             </div>
-            {!rated && (
-              <div className="flashcard-front-footer">
-                <div className="flashcard-due-info">
-                  <Clock3 size={14} />
-                  <span>{dueLabel}</span>
-                  <span className="flashcard-retention">Retention: {retentionPct}%</span>
-                </div>
-                <div className="flashcard-flip-indicator">
-                  <RotateCcw size={16} />
-                  <span>Tap to flip</span>
-                </div>
-              </div>
-            )}
+            <div className="flashcard-badges">
+              <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
+                {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                {a.isCorrect ? 'Correct' : 'Incorrect'}
+              </span>
+              <span className={cx('flashcard-strength-badge', strengthLabel.toLowerCase())}>
+                {strengthLabel}
+              </span>
+            </div>
           </div>
-
-          {/* === BACK === */}
-          <div className="flashcard-face flashcard-face-back" onClick={(e) => e.stopPropagation()}>
-            <div className="flashcard-card-header">
-              <div className="flashcard-meta">
-                <span className="flashcard-course">{a.courseCode}</span>
-                <span className="flashcard-topic">{a.topicName}</span>
+          <div className="flashcard-question">
+            <h3><LatexText text={a.questionText} /></h3>
+          </div>
+          {!rated && (
+            <div className="flashcard-front-footer">
+              <div className="flashcard-due-info">
+                <Clock3 size={14} />
+                <span>{dueLabel}</span>
+                <span className="flashcard-retention">Retention: {retentionPct}%</span>
               </div>
-              <div className="flashcard-badges">
-                <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
-                  {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                  {a.isCorrect ? 'Correct' : 'Incorrect'}
-                </span>
-              </div>
-            </div>
-
-            <div className="flashcard-answers">
-              <div className="flashcard-answer-row student">
-                <strong>Your answer:</strong>
-                <span><LatexText text={a.selectedAnswerText || '(no answer)'} /></span>
-              </div>
-              <div className="flashcard-answer-row correct">
-                <strong>Correct answer:</strong>
-                <span><LatexText text={a.correctAnswerText || '(unavailable)'} /></span>
-              </div>
-            </div>
-
-            <div className="flashcard-due-info">
-              <Clock3 size={14} />
-              <span>{dueLabel}</span>
-              <span className="flashcard-retention">Retention: {retentionPct}%</span>
-              <span className="flashcard-date">Answered {new Date(a.answeredAt).toLocaleDateString()}</span>
-            </div>
-
-            {/* Explanation button — opens popup */}
-            {hasExplanation && (
-              <button className="ghost-button full flashcard-explain-popup-btn" onClick={() => setShowExplanationPopup(true)}>
-                <BookOpen size={16} />
-                Show explanation
-              </button>
-            )}
-
-            {/* AI explanation */}
-            <button
-              className="ghost-button full flashcard-ai-btn"
-              onClick={handleAskAI}
-              disabled={aiLoading}
-            >
-              <Sparkles size={16} />
-              {aiLoading ? 'Getting AI explanation...' : aiExplanation ? 'Ask AI again' : 'Ask AI to explain'}
-            </button>
-
-            {aiExplanation && (
-              <div className="flashcard-ai-response">
-                <div className="flashcard-ai-header">
-                  <Bot size={16} />
-                  <strong>AI Explanation</strong>
-                </div>
-                <p>{aiExplanation}</p>
-              </div>
-            )}
-
-            {aiError && (
-              <div className="flashcard-ai-response error">
-                <AlertCircle size={14} />
-                <p>{aiError}</p>
-              </div>
-            )}
-
-            {/* Review rating buttons */}
-            <div className="flashcard-rating-actions">
-              {rated ? (
-                <div className="flashcard-rated-msg">
-                  <CheckCircle2 size={16} />
-                  <span>Reviewed! Scroll for next card.</span>
-                </div>
-              ) : (
-                <>
-                  <span className="flashcard-rate-label">How well did you remember?</span>
-                  <div className="flashcard-rate-buttons">
-                    <button className="rate-btn again" onClick={() => handleRate('again')}>
-                      <RotateCcw size={14} />
-                      Again
-                    </button>
-                    <button className="rate-btn hard" onClick={() => handleRate('hard')}>
-                      Hard
-                    </button>
-                    <button className="rate-btn good" onClick={() => handleRate('good')}>
-                      Good
-                    </button>
-                    <button className="rate-btn easy" onClick={() => handleRate('easy')}>
-                      <Sparkles size={14} />
-                      Easy
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Flip back button */}
-            {!rated && (
-              <button className="ghost-button full flashcard-flip-back-btn" onClick={handleFlip}>
+              <div className="flashcard-flip-indicator">
                 <RotateCcw size={16} />
-                Flip back to question
-              </button>
+                <span>Tap to flip</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* === BACK === */}
+        <div className={`flashcard-face flashcard-face-back${isFlipped ? '' : ' hidden'}`}>
+          <div className="flashcard-card-header">
+            <div className="flashcard-meta">
+              <span className="flashcard-course">{a.courseCode}</span>
+              <span className="flashcard-topic">{a.topicName}</span>
+            </div>
+            <div className="flashcard-badges">
+              <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
+                {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                {a.isCorrect ? 'Correct' : 'Incorrect'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flashcard-answers">
+            <div className="flashcard-answer-row student">
+              <strong>Your answer:</strong>
+              <span><LatexText text={a.selectedAnswerText || '(no answer)'} /></span>
+            </div>
+            <div className="flashcard-answer-row correct">
+              <strong>Correct answer:</strong>
+              <span><LatexText text={a.correctAnswerText || '(unavailable)'} /></span>
+            </div>
+          </div>
+
+          <div className="flashcard-due-info">
+            <Clock3 size={14} />
+            <span>{dueLabel}</span>
+            <span className="flashcard-retention">Retention: {retentionPct}%</span>
+            <span className="flashcard-date">Answered {new Date(a.answeredAt).toLocaleDateString()}</span>
+          </div>
+
+          {/* Explanation button — opens popup */}
+          {hasExplanation && (
+            <button className="ghost-button full flashcard-explain-popup-btn" onClick={() => setShowExplanationPopup(true)}>
+              <BookOpen size={16} />
+              Show explanation
+            </button>
+          )}
+
+          {/* AI explanation */}
+          <button
+            className="ghost-button full flashcard-ai-btn"
+            onClick={handleAskAI}
+            disabled={aiLoading}
+          >
+            <Sparkles size={16} />
+            {aiLoading ? 'Getting AI explanation...' : aiExplanation ? 'Ask AI again' : 'Ask AI to explain'}
+          </button>
+
+          {aiExplanation && (
+            <div className="flashcard-ai-response">
+              <div className="flashcard-ai-header">
+                <Bot size={16} />
+                <strong>AI Explanation</strong>
+              </div>
+              <p>{aiExplanation}</p>
+            </div>
+          )}
+
+          {aiError && (
+            <div className="flashcard-ai-response error">
+              <AlertCircle size={14} />
+              <p>{aiError}</p>
+            </div>
+          )}
+
+          {/* Review rating buttons */}
+          <div className="flashcard-rating-actions">
+            {rated ? (
+              <div className="flashcard-rated-msg">
+                <CheckCircle2 size={16} />
+                <span>Reviewed! Scroll for next card.</span>
+              </div>
+            ) : (
+              <>
+                <span className="flashcard-rate-label">How well did you remember?</span>
+                <div className="flashcard-rate-buttons">
+                  <button className="rate-btn again" onClick={() => handleRate('again')}>
+                    <RotateCcw size={14} />
+                    Again
+                  </button>
+                  <button className="rate-btn hard" onClick={() => handleRate('hard')}>
+                    Hard
+                  </button>
+                  <button className="rate-btn good" onClick={() => handleRate('good')}>
+                    Good
+                  </button>
+                  <button className="rate-btn easy" onClick={() => handleRate('easy')}>
+                    <Sparkles size={14} />
+                    Easy
+                  </button>
+                </div>
+              </>
             )}
           </div>
+
+          {/* Flip back button */}
+          {!rated && (
+            <button className="ghost-button full flashcard-flip-back-btn" onClick={handleFlip}>
+              <RotateCcw size={16} />
+              Flip back to question
+            </button>
+          )}
         </div>
       </article>
 
@@ -3382,7 +3383,7 @@ function FlashcardsPage() {
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack flashcards-page">
       <PageHeader title="Flashcards">
         <span className="score-chip">{stats.dueNow} due</span>
       </PageHeader>
@@ -3394,11 +3395,11 @@ function FlashcardsPage() {
         </div>
         <div className="flashcard-stat">
           <span className="flashcard-stat-value weak">{stats.weak}</span>
-          <span className="flashcard-stat-label">Weak</span>
+          <span className="flashcard-stat-label">Weak courses</span>
         </div>
         <div className="flashcard-stat">
           <span className="flashcard-stat-value strong">{stats.strong}</span>
-          <span className="flashcard-stat-label">Strong</span>
+          <span className="flashcard-stat-label">Strong courses</span>
         </div>
         <div className="flashcard-stat">
           <span className="flashcard-stat-value mastered">{stats.mastered}</span>
@@ -3998,6 +3999,70 @@ function ProfilePage() {
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Course editor modal state
+  const [courseEditorOpen, setCourseEditorOpen] = useState(false)
+  const [courseSearch, setCourseSearch] = useState('')
+  const [courseResults, setCourseResults] = useState<Course[]>([])
+  const [courseLoading, setCourseLoading] = useState(false)
+  const [courseTotal, setCourseTotal] = useState(0)
+  const [courseHasMore, setCourseHasMore] = useState(false)
+  const [courseNextCursor, setCourseNextCursor] = useState(0)
+  const [tempSelected, setTempSelected] = useState<Array<{ code: string; title: string }>>([])
+
+  const departmentName = departments.find((d) => d.code === draft.departmentCode)?.name ?? draft.departmentName
+
+  // Debounced course search for the editor modal
+  useEffect(() => {
+    if (!courseEditorOpen) return
+    const timer = setTimeout(async () => {
+      setCourseLoading(true)
+      try {
+        const data = await api.departmentCourses(departmentName, courseSearch, 20, 0)
+        setCourseResults(data.courses)
+        setCourseTotal(data.total)
+        setCourseHasMore(data.hasMore)
+        setCourseNextCursor(data.nextCursor)
+      } catch {
+        setCourseResults([])
+      } finally {
+        setCourseLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [courseSearch, courseEditorOpen, departmentName])
+
+  function openCourseEditor() {
+    setTempSelected([...draft.selectedCourses])
+    setCourseSearch('')
+    setCourseResults([])
+    setCourseEditorOpen(true)
+  }
+
+  function toggleEditorCourse(course: Course) {
+    setTempSelected((prev) => {
+      const exists = prev.find((c) => c.code === course.code)
+      if (exists) return prev.filter((c) => c.code !== course.code)
+      if (prev.length >= 15) return prev
+      return [...prev, { code: course.code, title: course.title }]
+    })
+  }
+
+  function removeEditorCourse(code: string) {
+    setTempSelected((prev) => prev.filter((c) => c.code !== code))
+  }
+
+  async function saveCourseEdits() {
+    const nextProfile = { ...draft, selectedCourses: tempSelected }
+    setDraft(nextProfile)
+    setCourseEditorOpen(false)
+    if (userId) {
+      try {
+        await saveUserProfile(userId, nextProfile)
+      } catch {}
+    }
+    saveProfile(nextProfile)
+  }
+
   useEffect(() => {
     if (profile) setDraft(profile)
   }, [profile])
@@ -4171,10 +4236,13 @@ function ProfilePage() {
       <section className="profile-card profile-stagger" style={{ animationDelay: '180ms' }}>
         <div className="profile-card-header">
           <BookOpen size={18} />
-          <div>
+          <div style={{ flex: 1 }}>
             <h2>My Courses</h2>
             <p>{draft.selectedCourses.length} course{draft.selectedCourses.length !== 1 ? 's' : ''} selected</p>
           </div>
+          <button type="button" className="profile-edit-courses-btn" onClick={openCourseEditor}>
+            <Pencil size={14} /> Edit
+          </button>
         </div>
         {draft.selectedCourses.length === 0 ? (
           <p className="profile-empty-hint">No courses selected yet. Complete registration to pick courses.</p>
@@ -4186,21 +4254,121 @@ function ProfilePage() {
                   <span className="profile-course-code">{course.code}</span>
                   <span className="profile-course-title">{course.title}</span>
                 </div>
-                <button
-                  type="button"
-                  className="profile-course-remove"
-                  onClick={() => setDraft({
-                    ...draft,
-                    selectedCourses: draft.selectedCourses.filter((c) => c.code !== course.code)
-                  })}
-                >
-                  <X size={14} />
-                </button>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {/* Course Editor Modal */}
+      {courseEditorOpen && (
+        <div className="course-editor-overlay" onClick={() => setCourseEditorOpen(false)}>
+          <div className="course-editor-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="course-editor-header">
+              <h3>Edit Courses</h3>
+              <button type="button" className="course-editor-close" onClick={() => setCourseEditorOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Currently selected */}
+            <div className="course-editor-selected">
+              <p className="course-editor-label">Selected ({tempSelected.length})</p>
+              {tempSelected.length === 0 ? (
+                <p className="course-editor-empty">No courses selected</p>
+              ) : (
+                <div className="course-editor-chips">
+                  {tempSelected.map((c) => (
+                    <span className="course-editor-chip" key={c.code}>
+                      <span className="course-editor-chip-code">{c.code}</span>
+                      <button type="button" onClick={() => removeEditorCourse(c.code)}>
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Search */}
+            <div className="course-editor-search">
+              <Search size={16} />
+              <input
+                type="text"
+                placeholder={`Search ${departmentName || 'department'} courses...`}
+                value={courseSearch}
+                onChange={(e) => setCourseSearch(e.target.value)}
+              />
+              {courseSearch && (
+                <button type="button" className="course-editor-search-clear" onClick={() => setCourseSearch('')}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Results */}
+            <div className="course-editor-results">
+              {courseLoading ? (
+                <div className="course-editor-loading">Loading courses...</div>
+              ) : courseResults.length === 0 ? (
+                <div className="course-editor-loading">
+                  {courseSearch ? 'No courses match your search' : 'Start typing to search courses'}
+                </div>
+              ) : (
+                <>
+                  <p className="course-editor-label">{courseTotal} course{courseTotal !== 1 ? 's' : ''} in {departmentName}</p>
+                  {courseResults.map((course) => {
+                    const isSelected = tempSelected.some((c) => c.code === course.code)
+                    return (
+                      <button
+                        type="button"
+                        key={course.code}
+                        className={`course-editor-result ${isSelected ? 'selected' : ''}`}
+                        onClick={() => toggleEditorCourse(course)}
+                        disabled={!isSelected && tempSelected.length >= 15}
+                      >
+                        <div className="course-editor-result-info">
+                          <span className="course-editor-result-code">{course.code}</span>
+                          <span className="course-editor-result-title">{course.title}</span>
+                        </div>
+                        <span className="course-editor-result-action">
+                          {isSelected ? <><Check size={14} /> Added</> : <><Plus size={14} /> Add</>}
+                        </span>
+                      </button>
+                    )
+                  })}
+                  {courseHasMore && (
+                    <button
+                      type="button"
+                      className="course-editor-load-more"
+                      onClick={async () => {
+                        try {
+                          const data = await api.departmentCourses(departmentName, courseSearch, 20, courseNextCursor)
+                          setCourseResults((prev) => [...prev, ...data.courses])
+                          setCourseHasMore(data.hasMore)
+                          setCourseNextCursor(data.nextCursor)
+                        } catch {}
+                      }}
+                    >
+                      Load more
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="course-editor-footer">
+              <button type="button" className="ghost-button" onClick={() => setCourseEditorOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="primary-button" onClick={saveCourseEdits}>
+                <Check size={16} /> Save ({tempSelected.length} course{tempSelected.length !== 1 ? 's' : ''})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Account Actions */}
       <section className="profile-card profile-stagger" style={{ animationDelay: '240ms' }}>

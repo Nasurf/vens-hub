@@ -369,19 +369,37 @@ export function buildReviewDeck(
 
 export function getDeckStats(cards: FlashcardCard[]) {
   let dueNow = 0
+
+  // Aggregate by course
+  const courseMap = new Map<string, { retentions: number[]; dueCount: number }>()
+  for (const card of cards) {
+    const code = card.latestAttempt.courseCode
+    if (!courseMap.has(code)) courseMap.set(code, { retentions: [], dueCount: 0 })
+    const entry = courseMap.get(code)!
+    entry.retentions.push(card.retention)
+    if (card.isDue) {
+      entry.dueCount++
+      dueNow++
+    }
+  }
+
   let weak = 0
   let strong = 0
   let mastered = 0
 
-  for (const card of cards) {
-    if (card.isDue) dueNow++
-    const strength = getStrengthLabel(card.retention, card.state)
-    if (strength === 'Weak') weak++
-    else if (strength === 'Mastered') mastered++
-    else strong++
+  for (const [, entry] of courseMap) {
+    const avgRetention = entry.retentions.reduce((a, b) => a + b, 0) / entry.retentions.length
+    const totalCards = entry.retentions.length
+    if (avgRetention < 0.4 || entry.dueCount > totalCards * 0.5) {
+      weak++
+    } else if (avgRetention >= 0.8 && totalCards >= 3) {
+      mastered++
+    } else {
+      strong++
+    }
   }
 
-  return { dueNow, weak, strong, mastered, total: cards.length }
+  return { dueNow, weak, strong, mastered, total: cards.length, totalCourses: courseMap.size }
 }
 
 // ─── localStorage Read/Write + Sync Metadata ──────────────────────────────────
