@@ -4111,7 +4111,7 @@ function ProfilePage() {
     setTempSelected((prev) => {
       const exists = prev.find((c) => c.code === course.code)
       if (exists) return prev.filter((c) => c.code !== course.code)
-      if (prev.length >= 15) return prev
+      if (prev.length >= 10) return prev
       return [...prev, { code: course.code, title: course.title }]
     })
   }
@@ -4307,14 +4307,14 @@ function ProfilePage() {
           <BookOpen size={18} />
           <div style={{ flex: 1 }}>
             <h2>My Courses</h2>
-            <p>{draft.selectedCourses.length} course{draft.selectedCourses.length !== 1 ? 's' : ''} selected</p>
+            <p>{draft.selectedCourses.length}/10 courses selected</p>
           </div>
           <button type="button" className="profile-edit-courses-btn" onClick={openCourseEditor}>
             <Pencil size={14} /> Edit
           </button>
         </div>
         {draft.selectedCourses.length === 0 ? (
-          <p className="profile-empty-hint">No courses selected yet. Complete registration to pick courses.</p>
+          <p className="profile-empty-hint">No courses selected yet. Tap Edit to add courses from your department.</p>
         ) : (
           <div className="profile-course-list">
             {draft.selectedCourses.map((course) => (
@@ -4323,9 +4323,35 @@ function ProfilePage() {
                   <span className="profile-course-code">{course.code}</span>
                   <span className="profile-course-title">{course.title}</span>
                 </div>
+                <button
+                  type="button"
+                  className="profile-course-remove"
+                  onClick={() => {
+                    const next = draft.selectedCourses.filter((c) => c.code !== course.code)
+                    const nextProfile = { ...draft, selectedCourses: next }
+                    setDraft(nextProfile)
+                    saveProfile(nextProfile)
+                    if (userId) saveUserProfile(userId, nextProfile).catch(() => {})
+                  }}
+                  aria-label={`Remove ${course.code}`}
+                >
+                  <X size={14} />
+                </button>
               </div>
             ))}
           </div>
+        )}
+        {draft.selectedCourses.length >= 8 && draft.selectedCourses.length < 10 && (
+          <p className="profile-course-limit-warn">
+            <AlertCircle size={14} />
+            {10 - draft.selectedCourses.length} course slot{10 - draft.selectedCourses.length !== 1 ? 's' : ''} remaining
+          </p>
+        )}
+        {draft.selectedCourses.length >= 10 && (
+          <p className="profile-course-limit-full">
+            <CheckCircle2 size={14} />
+            Maximum courses reached
+          </p>
         )}
       </section>
 
@@ -4342,7 +4368,10 @@ function ProfilePage() {
 
             {/* Currently selected */}
             <div className="course-editor-selected">
-              <p className="course-editor-label">Selected ({tempSelected.length})</p>
+              <p className="course-editor-label">
+                Selected ({tempSelected.length}/10)
+                {tempSelected.length >= 10 && <span className="course-editor-limit-badge">MAX</span>}
+              </p>
               {tempSelected.length === 0 ? (
                 <p className="course-editor-empty">No courses selected</p>
               ) : (
@@ -4394,7 +4423,7 @@ function ProfilePage() {
                         key={course.code}
                         className={`course-editor-result ${isSelected ? 'selected' : ''}`}
                         onClick={() => toggleEditorCourse(course)}
-                        disabled={!isSelected && tempSelected.length >= 15}
+                        disabled={!isSelected && tempSelected.length >= 10}
                       >
                         <div className="course-editor-result-info">
                           <span className="course-editor-result-code">{course.code}</span>

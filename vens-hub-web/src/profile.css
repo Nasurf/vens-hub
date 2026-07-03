@@ -386,6 +386,56 @@
   margin: 0;
 }
 
+/* Course limit indicators */
+.profile-course-limit-warn,
+.profile-course-limit-full {
+  align-items: center;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+}
+
+.profile-course-limit-warn {
+  background: rgba(245, 158, 11, 0.08);
+  color: #92400e;
+}
+
+.profile-course-limit-full {
+  background: rgba(16, 185, 129, 0.08);
+  color: #047857;
+}
+
+[data-theme="dark"] .profile-course-limit-warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .profile-course-limit-full {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+}
+
+/* Course editor limit badge */
+.course-editor-limit-badge {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  margin-left: 0.5rem;
+  letter-spacing: 0.05em;
+}
+
+[data-theme="dark"] .course-editor-limit-badge {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
 /* ─── Stagger entry animation ─── */
 .profile-stagger {
   animation: profileFadeUp 400ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
