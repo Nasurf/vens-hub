@@ -38,7 +38,7 @@ TEXTBOOKS_DIR="${TEXTBOOKS_DIR:-${DATA_DIR}/textbooks}"
 COURSES_FILE="${COURSES_FILE:-${TEXTBOOKS_DIR}/courses.json}"
 CACHE_ROOT="${CACHE_ROOT:-$HOME/OUTPUT_DATA2}"
 CACHE_DIR="${CACHE_DIR:-${CACHE_ROOT}/cache}"
-EMBEDDINGS_DIR="${EMBEDDINGS_DIR:-${CACHE_ROOT}/emdeddings}"
+EMBEDDINGS_DIR="${EMBEDDINGS_DIR:-${CACHE_ROOT}/embeddings}"
 CONTAINER_NAME="${CONTAINER_NAME:-coursegen-rag}"
 GEMINI_CACHE_DIR="${GEMINI_CACHE_DIR:-${CACHE_ROOT}/data/gemini_cache}"
 
@@ -48,7 +48,6 @@ THEORY_COUNT="$DEFAULT_THEORY_COUNT"
 CALC_COUNT="$DEFAULT_CALC_COUNT"
 REQUEST_DELAY="$DEFAULT_REQUEST_DELAY"
 NO_RESUME=false
-SKIP_FIRESTORE=false
 STRUCTURED_FLAG=""
 MODE="interactive"  # interactive | background
 SKIP_SYNC=false
@@ -221,7 +220,7 @@ sync_data_from_image() {
     print_success "Updated: $COURSES_FILE"
 
     safe_reset_dir "$EMBEDDINGS_DIR"
-    docker cp "$sync_container:/app/OUTPUT_DATA2/emdeddings/." "$EMBEDDINGS_DIR/"
+    docker cp "$sync_container:/app/OUTPUT_DATA2/embeddings/." "$EMBEDDINGS_DIR/"
     print_success "Updated embeddings in: $EMBEDDINGS_DIR"
 
     docker rm "$sync_container" >/dev/null
@@ -265,7 +264,7 @@ build_docker_command() {
     fi
 
     if [[ -d "$EMBEDDINGS_DIR" ]]; then
-        DOCKER_CMD+=("-v" "$EMBEDDINGS_DIR:/app/OUTPUT_DATA2/emdeddings")
+        DOCKER_CMD+=("-v" "$EMBEDDINGS_DIR:/app/OUTPUT_DATA2/embeddings")
     fi
 
     for port in "${PORTS[@]}"; do
@@ -290,9 +289,6 @@ build_run_arguments() {
 
     if [[ "$NO_RESUME" == "true" ]]; then
         RUN_ARGS+=("--no-resume")
-    fi
-    if [[ "$SKIP_FIRESTORE" == "true" ]]; then
-        RUN_ARGS+=("--skip-firestore")
     fi
     if [[ -n "$STRUCTURED_FLAG" ]]; then
         RUN_ARGS+=("$STRUCTURED_FLAG")
@@ -327,7 +323,6 @@ Options:
   --calc-per-request N     Calculation questions per request (default: 5)
   --request-delay SECS     Delay between Gemini calls (default: 2.0)
   --no-resume              Disable resume functionality
-  --skip-firestore         Do not write to Firestore
   --structured-output      Enable Gemini structured output
   --no-structured-output   Disable Gemini structured output
   --background             Run container detached (keep running)
@@ -359,8 +354,6 @@ parse_args() {
                 REQUEST_DELAY="$2"; shift 2 ;;
             --no-resume)
                 NO_RESUME=true; shift ;;
-            --skip-firestore)
-                SKIP_FIRESTORE=true; shift ;;
             --structured-output)
                 STRUCTURED_FLAG="--structured-output"; shift ;;
             --no-structured-output)

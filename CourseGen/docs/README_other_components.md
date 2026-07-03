@@ -3,7 +3,7 @@
 This README covers the remaining modules, utilities, data models, testing, deployment, and miscellaneous features that support the core pipelines (RAG, outlines, questions, embeddings). These components provide modularity, reliability, and extensibility for building full educational applications.
 
 ## Data Models (`data_models/`)
-Pydantic-based schemas ensure type safety, validation, and serialization across the project. All models support JSON/MD export and integrate with Firestore/Chroma.
+Pydantic-based schemas ensure type safety, validation, and serialization across the project. All models support JSON/MD export and integrate with Chroma.
 
 ### Key Models
 - **`course_model.py` & `course_outline.py`**: Course info (code, department, prerequisites) and outline structure (modules, objectives, assessments). Validates completeness (e.g., every module has LOs).
@@ -35,13 +35,6 @@ Beyond `convert_to_embeddings.py`:
 - **`cache_utils.py`**: Embed/OCR caching by hash.
 - **`billing.py`**: Token counting and cost ledger; supports rebasing.
 - **`inspect_chroma.py`**: CLI for querying collections (e.g., `--query "DSP" --top-k 5`).
-
-### Firestore Service (`services/Firestore/firebase_service.py`)
-Cloud storage for outlines/questions:
-- Upload/download: `upload_outline(course_code, outline_md)`.
-- Queries: Filter by tags (e.g., department="EEE").
-- Setup: `GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json`.
-- Usage: `--with-firestore` in generators.
 
 ### Ollama Service (`services/Ollama/ollama_service.py`)
 Local embeddings/retrieval fallback:
@@ -124,7 +117,7 @@ OCR Sanity: `python run_ocr_sanity.py path/to/pdf` (single-file test).
   Build: `docker build -t coursegen .`
   Run: `docker run -v $(pwd)/data:/app/data -e TESSDATA_PREFIX=/usr/share/tessdata coursegen python -m services.RAG.convert_to_embeddings -i /app/data/textbooks ...`
 - **Config**: `config.py` for paths; override via env.
-- **Cloud**: Deploy pipelines to GCP/Cloud Run; use Firestore for state.
+- **Cloud**: Deploy pipelines to GCP/Cloud Run; use Cloudflare for state.
 - **CI/CD**: GitHub Actions for tests/lint on push.
 
 ## Batch Processing (`batch_processing.py`)

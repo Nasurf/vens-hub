@@ -94,7 +94,6 @@ def test_question_generator_with_email_notifications():
                 theory_questions_per_request_override=2,
                 calc_questions_per_request_override=1,
                 resume=False,
-                store_firestore=False
             )
 
             # Test course with email notifications

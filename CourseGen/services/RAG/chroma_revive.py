@@ -16,7 +16,7 @@ logger = logging.getLogger("chroma_revive")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROGRESS_STATE = REPO_ROOT / "OUTPUT_DATA2/progress_report/progress_state.json"
 DEFAULT_PROGRESS_DIR = DEFAULT_PROGRESS_STATE.parent
-DEFAULT_PERSIST_DIR = REPO_ROOT / "OUTPUT_DATA2/emdeddings"
+DEFAULT_PERSIST_DIR = REPO_ROOT / "OUTPUT_DATA2/embeddings"
 DEFAULT_COLLECTION = "course_embeddings"
 
 

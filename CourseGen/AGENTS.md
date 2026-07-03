@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - `services/RAG`: End-to-end PDF → OCR → chunk → embed → Chroma pipeline.
 - `services/QuestionRag`: Question generation utilities (e.g., `batch_utils.py`).
-- `services/{Cloudflare,Gemini,Ollama,Firestore}`: Provider/client helpers.
+- `services/{Cloudflare,Gemini,Ollama}`: Provider/client helpers.
 - `utils/`: Reusable helpers (caching, data cleaning, PDF/image tools).
 - `data_models/`: Pydantic models and typed schemas.
 - `tests/`: PyTest-style tests (`test_*.py`).
@@ -25,7 +25,7 @@
 ## Testing Guidelines
 - Framework: PyTest with plain `assert` style (see `tests/test_batch_utils.py`).
 - Test files: `tests/test_<module>.py`; name test functions `test_*`.
-- Run fast, deterministic tests; mock external APIs (Cloudflare/Gemini/Firestore) and filesystem.
+- Run fast, deterministic tests; mock external APIs (Cloudflare/Gemini) and filesystem.
 - Add tests for new behavior and critical bug fixes.
 
 ## Commit & Pull Request Guidelines

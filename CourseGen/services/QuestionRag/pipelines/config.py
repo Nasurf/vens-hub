@@ -238,7 +238,6 @@ class QuestionBatchConfig:
     output_path: Optional[Path] = None
     custom_plan: Optional[List[RequestPlan]] = None
     resume: bool = True
-    store_firestore: bool = True
 
     def normalized_topics(self) -> Optional[set[str]]:
         if self.target_topics is None:

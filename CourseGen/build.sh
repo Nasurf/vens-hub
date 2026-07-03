@@ -79,7 +79,7 @@ check_prerequisites() {
     fi
 
     # Check for embeddings data (baked into the image during build)
-    if [[ -d "OUTPUT_DATA2/emdeddings" ]]; then
+    if [[ -d "OUTPUT_DATA2/embeddings" ]]; then
         print_status "Found embeddings bundle - will be baked into the image"
     else
         print_warning "No embeddings data found. Container will start with empty embeddings."
@@ -408,7 +408,7 @@ update_embeddings_and_rebuild() {
     fi
 
     # Step 1: Regenerate embeddings in the host directory
-    print_status "Step 1: Regenerating embeddings in OUTPUT_DATA2/emdeddings..."
+    print_status "Step 1: Regenerating embeddings in OUTPUT_DATA2/embeddings..."
     if docker run --rm \
         --entrypoint python \
         -v "$(pwd)/OUTPUT_DATA2:/app/OUTPUT_DATA2" \
@@ -421,9 +421,9 @@ update_embeddings_and_rebuild() {
         -c pdfs_bge_m3_cloudflare \
         --workers 4 \
         --resume 2>&1; then
-        print_success "Embeddings regenerated in OUTPUT_DATA2/emdeddings"
+        print_success "Embeddings regenerated in OUTPUT_DATA2/embeddings"
     else
-        print_error "Failed to regenerate embeddings in OUTPUT_DATA2/emdeddings"
+        print_error "Failed to regenerate embeddings in OUTPUT_DATA2/embeddings"
         return 1
     fi
 

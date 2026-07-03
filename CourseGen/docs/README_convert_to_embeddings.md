@@ -31,7 +31,7 @@
 When environment overrides are not supplied, directories are rooted at `<repo>/OUTPUT_DATA2`:
 - Export JSONL + progress: `OUTPUT_DATA2/progress_report`
 - Cache (OCR artifacts, temporary text, failed payloads): `OUTPUT_DATA2/cache`
-- Chroma persistence: `OUTPUT_DATA2/emdeddings` (mounted volume in containers)
+- Chroma persistence: `OUTPUT_DATA2/embeddings` (mounted volume in containers)
 - Billing state: `<persist-dir>/billing_state.json`
 - Dedup index: `<persist-dir>/seen_files.json`
 
@@ -48,7 +48,7 @@ python -m services.RAG.convert_to_embeddings --input-dir <PDF_ROOT> [options]
 | `--cache-dir` | OCR + text cache root (default `OUTPUT_DATA2/cache`). |
 | `--with-chroma` / `--no-chroma` | Toggle Chroma upserts (default on). |
 | `-c / --collection` | Chroma collection name (default `course_embeddings`). |
-| `-p / --persist-dir` | Chroma persistence directory (default `OUTPUT_DATA2/emdeddings`). |
+| `-p / --persist-dir` | Chroma persistence directory (default `OUTPUT_DATA2/embeddings`). |
 | `--workers` | ProcessPool workers for PDF processing (default 2). |
 | `--omp-threads` | OpenMP threads exposed to OCR libraries (default 2). |
 | `--timeout` | Per-file processing timeout in seconds (default 1800). |
@@ -73,7 +73,7 @@ python -m services.RAG.convert_to_embeddings --input-dir <PDF_ROOT> [options]
     --export-dir OUTPUT_DATA2/progress_report \
     --cache-dir OUTPUT_DATA2/cache \
     --collection pdfs_bge_m3_cloudflare \
-    --persist-dir OUTPUT_DATA2/emdeddings \
+    --persist-dir OUTPUT_DATA2/embeddings \
     --workers 4 \
     --embed-batch 32
   ```
@@ -148,7 +148,7 @@ python -m services.RAG.convert_to_embeddings --input-dir <PDF_ROOT> [options]
 ## Integrations
 - After ingestion, query Chroma with `services/RAG/inspect_chroma.py` to verify recall:
   ```bash
-  python services/RAG/inspect_chroma.py -c pdfs_bge_m3_cloudflare -p OUTPUT_DATA2/emdeddings --query "z-transform"
+  python services/RAG/inspect_chroma.py -c pdfs_bge_m3_cloudflare -p OUTPUT_DATA2/embeddings --query "z-transform"
   ```
 - Downstream services (question generation, outline generation) expect consistent metadata keys (`DEPARTMENT`, `LEVEL`, `COURSE_CODE`, etc.) provided by `path_meta.parse_path_meta`.
 - The `Billing` log can be exported into monitoring dashboards or reconciled with Cloudflare usage for budgeting.

@@ -201,10 +201,6 @@ run_container() {
         run_args+=("--no-resume")
     fi
 
-    if [[ "$SKIP_FIRESTORE" == "true" ]]; then
-        run_args+=("--skip-firestore")
-    fi
-
     if [[ "$DEBUG" == "true" ]]; then
         run_args+=("--temperature" "0.1")
         run_args+=("--request-delay" "1")
@@ -232,7 +228,6 @@ main() {
     REQUEST_DELAY="$DEFAULT_REQUEST_DELAY"
     INTERACTIVE=true
     NO_RESUME=false
-    SKIP_FIRESTORE=false
     DEBUG=false
     ENV_FILE=""
     STRUCTURED_FLAG=""
@@ -268,10 +263,6 @@ main() {
                 NO_RESUME=true
                 shift
                 ;;
-            --skip-firestore)
-                SKIP_FIRESTORE=true
-                shift
-                ;;
             --debug)
                 DEBUG=true
                 shift
@@ -301,7 +292,6 @@ main() {
                 echo "  --calc-per-request N     Number of calculation questions per request (default: $DEFAULT_CALC_COUNT)"
                 echo "  --request-delay SECS     Delay between API calls in seconds (default: $DEFAULT_REQUEST_DELAY)"
                 echo "  --no-resume           Do not reuse cached generations"
-                echo "  --skip-firestore      Disable persistence to Firestore"
                 echo "  --debug               Enable debug mode (lower temp, faster requests)"
                 echo "  --structured-output   Enable Gemini structured output schema"
                 echo "  --no-structured-output Disable Gemini structured output schema"
@@ -331,7 +321,6 @@ main() {
     echo "  Request Delay: ${REQUEST_DELAY}s"
     echo "  Interactive Mode: $INTERACTIVE"
     echo "  Resume Enabled: $([ "$NO_RESUME" == "false" ] && echo "Yes" || echo "No")"
-    echo "  Firestore Enabled: $([ "$SKIP_FIRESTORE" == "false" ] && echo "Yes" || echo "No")"
     echo "  Debug Mode: $DEBUG"
     echo ""
 

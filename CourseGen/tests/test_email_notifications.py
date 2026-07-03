@@ -32,7 +32,6 @@ def test_generation_started_email(monkeypatch):
         theory_per_request=10,
         calc_per_request=5,
         resume=True,
-        store_firestore=True,
         model="gemini-2.5-flash-lite",
         temperature=0.2,
     )

@@ -11,7 +11,7 @@ Inspect and export a ChromaDB collection.
 - Export compact metadata CSV
 
 Examples (PowerShell):
-  $PERSIST = r"/home/raregazetto/Documents/Recursive-PDF-EXTRACTION-AND-RAG/COURSEGEN/OUTPUT_DATA2/emdeddings"
+  $PERSIST = r"/home/raregazetto/Documents/Recursive-PDF-EXTRACTION-AND-RAG/COURSEGEN/OUTPUT_DATA2/embeddings"
   $COLL    = "course_embeddings"
 
   # list collections

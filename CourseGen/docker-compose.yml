@@ -15,7 +15,7 @@ services:
       - PYTHONUNBUFFERED=1
       - COURSEGEN_COURSES_JSON=/app/data/textbooks/courses.json
       - COURSEGEN_CACHE_DIR=/app/OUTPUT_DATA2/cache
-      - CHROMA_PERSIST_DIR=/app/OUTPUT_DATA2/emdeddings
+      - CHROMA_PERSIST_DIR=/app/OUTPUT_DATA2/embeddings
       - OMP_NUM_THREADS=2
       - WORKERS=2   # configurable worker count
     env_file:
@@ -32,7 +32,7 @@ services:
     
     # Health check - verify ChromaDB embeddings directory exists
     healthcheck:
-      test: ["CMD", "test", "-d", "/app/OUTPUT_DATA2/emdeddings"]
+      test: ["CMD", "test", "-d", "/app/OUTPUT_DATA2/embeddings"]
       interval: 30s
       timeout: 10s
       retries: 3

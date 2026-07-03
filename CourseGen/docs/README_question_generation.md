@@ -6,7 +6,7 @@ This pipeline produces **20 fully grounded questions per subtopic** (10 theory +
 - **Deterministic batches**: `theory-1`, `calculation-1`, `calculation-2` ensure exactly 20 questions per subtopic.
 - **RAG-driven prompts**: `ChromaQuery` supplies filtered chunks (metadata + similarity gating) before each Gemini request.
 - **High-throughput execution**: Topic-parallel workers (ThreadPool) process multiple topics at once while honouring request delays.
-- **Resilience**: Disk-backed caches, `CourseProgressCache`, and Firestore snapshots allow interruption-free resumes.
+- **Resilience**: Disk-backed caches and `CourseProgressCache` allow interruption-free resumes.
 - **Operational safeguards**: Gemini API keys rotate via `ApiKeyManager`; exhaustion triggers a controlled shutdown and optional email alerts.
 - **Calculation quality**: Step-by-step LaTeX solutions are normalized, and solution steps can be wrapped/unwrapped with `--no-latex-wrap`.
 
@@ -19,7 +19,7 @@ This pipeline produces **20 fully grounded questions per subtopic** (10 theory +
 | Batch parsing | `services/QuestionRag/pipelines/json_utils.py` |
 | Progress + cache | `services/QuestionRag/utils/course_progress.py`, `services/QuestionRag/utils/cache.py` |
 | Topic parallelism | `services/QuestionRag/pipelines/worker_pool.py` |
-| Firestore integration (optional) | `services/Firestore/firebase_service.py` |
+
 
 ## Architecture
 1. **Outline discovery** – loads `courses.json` and filters courses that already supply `outline` blocks.
@@ -28,14 +28,14 @@ This pipeline produces **20 fully grounded questions per subtopic** (10 theory +
 4. **Prompt construction** – `build_question_generation_prompt` assembles request metadata (difficulty, Bloom level, request kind) and RAG snippets.
 5. **Gemini call** – `GeminiService` selects a key using `ApiKeyManager`, applies structured output or thinking mode if requested, and retries failed calls (`request_attempts`).
 6. **Validation + caching** – responses are parsed into `GeminiQuestionBatch`, coerced to `Question` Pydantic models, stored in `QuestionCache`, and progress counters are updated.
-7. **Persistence** – Firestore updates run after both calculation batches succeed; JSONL export happens when `--output-jsonl` is provided.
+7. **Persistence** – JSONL export happens when `--output-jsonl` is provided.
 8. **Notifications** – optional `services.Email.email_service` emits start/completion/emergency emails (Docker helper script wires this up automatically).
 
 ## Prerequisites
 - Populate `services/Gemini/gemini_api_keys.py` with valid Gemini API keys **or** expose them via environment variables before starting the container.
 - Ensure embeddings exist in ChromaDB (see [README_convert_to_embeddings.md](README_convert_to_embeddings.md)).
 - `courses.json` must contain `outline` arrays per course. Default path resolves through `config.py` or `COURSEGEN_COURSES_JSON`.
-- Optional: set up Firestore credentials and `EMAIL_NOTIFICATIONS_ENABLED=true` if you want completion emails.
+- Optional: set `EMAIL_NOTIFICATIONS_ENABLED=true` if you want completion emails.
 
 ## CLI Usage
 ```bash
@@ -59,7 +59,7 @@ Important flags (see `build_arg_parser()` for the full list):
 | `--topics`, `--subtopics` | Case-insensitive filters. |
 | `--output-jsonl PATH` | Dump all questions produced in this run to a single JSONL file. |
 | `--disable-parallel` | Force sequential topic processing. |
-| `--skip-firestore`, `--no-resume`, `--no-latex-wrap` | Opt out of persistence, resume cache, or LaTeX formatting. |
+| `--no-resume`, `--no-latex-wrap` | Opt out of resume cache or LaTeX formatting. |
 
 ### Command Examples
 - **Default full run (all courses):**
@@ -120,7 +120,7 @@ config = QuestionBatchConfig(
     courses_json_path=Path("data/textbooks/courses.json"),
     cache_dir=Path("OUTPUT_DATA2/cache"),
     resume=True,
-    store_firestore=False,
+    resume=True,
 )
 
 runner = QuestionBatchRunner(generator)
@@ -132,7 +132,6 @@ print(f"Generated {len(questions)} questions")
 - **Question cache** – `OUTPUT_DATA2/cache/question_gen/cache.json` indexes per-request payloads and metadata; each successful batch stores JSON to disk for reuse.
 - **Course progress** – `OUTPUT_DATA2/cache/course_progress/{course}.json` records theory/calculation counters, request state, completion status, and timestamps.
 - **Error dumps** – raw Gemini payloads that fail schema validation are written to `OUTPUT_DATA2/cache/failed_responses/` (override with `COURSEGEN_DEBUG_DUMP_DIR`).
-- **Firestore** – the `GenerationProgress` collection tracks per-course status once both calculation batches complete.
 - **Resume workflow** – interrupted batches are marked `in_progress`; next run upgrades them to `interrupted`, clears stale cache entries, and retries automatically. `--no-resume` forces regeneration from scratch.
 
 ### Sample `course_progress` entry
@@ -161,25 +160,23 @@ print(f"Generated {len(questions)} questions")
 - **Parallelism defaults** – `qg_enable_topic_parallelism` (central config) toggles thread usage; CLI `--disable-parallel` overrides it at runtime.
 - **Delays & jitter** – `request_delay_s` and `delay_jitter` limit concurrency pressure on Gemini. Jitter is applied multiplicatively (`±25%` by default).
 - **LaTeX wrapping** – disabled via `--no-latex-wrap` for consumers that do not support math delimiters.
-- **Output export** – `--output-jsonl` writes the exact questions returned in this session; Firestore / local caches remain authoritative for resume runs.
+- **Output export** – `--output-jsonl` writes the exact questions returned in this session; local caches remain authoritative for resume runs.
 
 ## Troubleshooting
 - **No RAG context** → verify embeddings exist for the course code; optionally allow broader metadata via `--rag-where` or lower `--rag-min-sim`.
 - **Duplicate questions** → delete the relevant cache entry under `OUTPUT_DATA2/cache/question_gen` and rerun with `--no-resume`.
 - **Key rotation stalls** → confirm `services/Gemini/gemini_api_keys.py` is populated and that the cache directory is writable; resetting quotas may require deleting `api_key_cache.json`.
-- **Firestore errors** → check credentials and network; use `--skip-firestore` to continue locally if Firestore is unavailable.
 - **Validation failures** → inspect dumped payload in `failed_responses/`; structured output (`--structured-output`) often eliminates parsing issues.
 - **Slowdowns** → reduce `--max-topic-workers`, bump `--request-delay`, or filter via `--topics`/`--subtopics` while debugging.
 
 ## Best Practices
-- Run `python -m services.QuestionRag.pipelines.question_generator --course-code "all"` nightly so caches stay warm and Firestore progress stays fresh.
+- Run `python -m services.QuestionRag.pipelines.question_generator --course-code "all"` nightly so caches stay warm.
 - Keep Gemini keys in sync across environments and mount `OUTPUT_DATA2/data/gemini_cache` when running in containers so daily usage survives restarts.
 - Review a sample from each course regularly; calculation questions rely on LaTeX rendering, so validate consumer support.
-- Monitor `OUTPUT_DATA2/cache/course_progress/*.json` and Firestore dashboards to catch stalled subtopics early.
+- Monitor `OUTPUT_DATA2/cache/course_progress/*.json` to catch stalled subtopics early.
 
 ## Future Enhancements
 - Adaptive difficulty selection based on historic performance.
-- Backpressure from Firestore to pause problematic courses automatically.
 - Multi-model generation (e.g., fallback to Gemini Pro for hard topics).
 
 The question generator is the backbone of CourseGen’s assessment tooling—treat the cache directories and API key pool as critical infrastructure to keep question production reliable.

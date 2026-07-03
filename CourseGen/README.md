@@ -9,7 +9,7 @@ CourseGen is a comprehensive, modular pipeline for processing educational materi
 - **Automated Generation**: Course outlines and questions using structured Gemini prompts.
 - **Load Balancing**: Rotates API keys to handle high-volume requests without rate limits.
 - **Observability**: Detailed logging, progress tracking, billing ledgers, and resumability.
-- **Modularity**: Separate services for RAG, Question Generation, providers (Gemini/Cloudflare/Ollama/Firestore), and utilities.
+- **Modularity**: Separate services for RAG, Question Generation, providers (Gemini/Cloudflare/Ollama), and utilities.
 - **Scalability**: Parallel processing, batching, and caching for large datasets (e.g., university course libraries).
 - **Docker Integration**: Full containerization with persistent volumes and AWS ECR deployment.
 - **Production Ready**: Optimized for deployment to AWS ECS, EKS, or other container platforms.
@@ -20,7 +20,7 @@ The project is organized into `services/` (core pipelines), `data_models/` (Pyda
 - `services/RAG/`: PDF ingestion, OCR, chunking, embedding, and ChromaDB storage. See [detailed README](README_convert_to_embeddings.md).
 - `services/QuestionRag/`: RAG-based course outline and question generation. See [Course Outline README](README_course_outline_generation.md) and [Question Generation README](README_question_generation.md).
 - `services/Gemini/`: API client with key load balancing. See [API Key Load Balancer README](README_api_key_load_balancer.md).
-- `services/{Cloudflare, Ollama, Firestore}/`: Provider-specific clients.
+- `services/{Cloudflare, Ollama}/`: Provider-specific clients.
 - `utils/`: Caching, data cleaning, progress tracking, and more.
 - `data_models/`: Typed models for courses, questions, documents, etc.
 - `data/`: Sample textbooks, courses.json, caches (gitignored).
@@ -72,10 +72,10 @@ Only the cache and course metadata are mounted from the host when the container 
 - `./OUTPUT_DATA2/cache/` – question generation caches that survive between runs
 - `./data/` – course inputs, outlines, and configuration files
 
-> ℹ️ Embeddings live inside the Docker image at `/app/OUTPUT_DATA2/emdeddings`. When you refresh them locally, rebuild (and optionally redeploy) the image so every environment picks up the new bundle.
+> ℹ️ Embeddings live inside the Docker image at `/app/OUTPUT_DATA2/embeddings`. When you refresh them locally, rebuild (and optionally redeploy) the image so every environment picks up the new bundle.
 
 ### 🔄 Updating Embeddings
-1. **Regenerate embeddings on the host** so `OUTPUT_DATA2/emdeddings` contains the new Chroma database:
+1. **Regenerate embeddings on the host** so `OUTPUT_DATA2/embeddings` contains the new Chroma database:
 
    ```bash
    python -m services.RAG.convert_to_embeddings \
@@ -129,13 +129,12 @@ grep '"code"' data/textbooks/courses.json | head -10
 
 ### Question Generation Troubleshooting
 - **"Course code not found"**: Check available courses in `data/textbooks/courses.json`
-- **"No RAG context found"**: Regenerate embeddings and rebuild the image so `/app/OUTPUT_DATA2/emdeddings` is up to date
+- **"No RAG context found"**: Regenerate embeddings and rebuild the image so `/app/OUTPUT_DATA2/embeddings` is up to date
 - **API errors**: Verify API keys in `.env` file are valid and have sufficient quota
 - **0 questions generated**: Course may not have sufficient RAG context or outlines
 - **Resume stuck on a subtopic**: Check `OUTPUT_DATA2/cache/course_progress/` for the course manifest; delete a single file to reset one course or fix any `state: "error"` entries.
 - **Memory issues**: Reduce `--theory-per-request` and `--calc-per-request` values
 - **Volume permission errors**: Ensure host directories have proper permissions (775 recommended)
-- **Firestore errors**: Check Firebase credentials and network connectivity
 
 ### Docker & AWS ECR Troubleshooting
 - **"Error saving credentials"**: Run `./build.sh --fix-credentials` to resolve credential helper issues
@@ -146,9 +145,9 @@ grep '"code"' data/textbooks/courses.json | head -10
 - **AWS CLI not found**: Install AWS CLI or authenticate manually with `aws ecr get-login-password`
 
 ### Embeddings-Specific Troubleshooting
-- **"No RAG context found"**: Regenerate embeddings locally and rebuild the image so `/app/OUTPUT_DATA2/emdeddings` is refreshed.
-- **"ChromaDB connection failed"**: Ensure you rebuilt after uploading the latest SQLite bundle; during local generation confirm `OUTPUT_DATA2/emdeddings` exists before building.
-- **"Permission denied on embeddings"**: This can happen while regenerating locally—make sure `OUTPUT_DATA2/emdeddings` is writable (`chmod`/`chown`) before running the converter.
+- **"No RAG context found"**: Regenerate embeddings locally and rebuild the image so `/app/OUTPUT_DATA2/embeddings` is refreshed.
+- **"ChromaDB connection failed"**: Ensure you rebuilt after uploading the latest SQLite bundle; during local generation confirm `OUTPUT_DATA2/embeddings` exists before building.
+- **"Permission denied on embeddings"**: This can happen while regenerating locally—make sure `OUTPUT_DATA2/embeddings` is writable (`chmod`/`chown`) before running the converter.
 - **"Embeddings outdated"**: Follow the two-step refresh (`convert_to_embeddings` → `./build.sh --cleanup` → optional `--deploy`).
 - **"Disk space full"**: Embedding databases are large; check available space with `df -h` before regenerating.
 - **"ChromaDB locked"**: Stop any process (local script or container) using the database, then retry the generation.
@@ -199,7 +198,7 @@ The `./run.sh` script provides enhanced container execution with:
 - **Error Recovery**: Graceful handling of authentication and network issues
 
 ### 📋 Prerequisites
-- **API Keys**: Ensure `.env` has valid API keys for Gemini, Cloudflare, and Firestore
+- **API Keys**: Ensure `.env` has valid API keys for Gemini and Cloudflare
 - **Persistent Data**: Cache outputs live in `OUTPUT_DATA2/cache/` and course configs in `data/`; regenerate embeddings locally and rebuild the image when they change.
 - **Course Data**: Verify `data/textbooks/courses.json` contains your course outlines
 - **AWS ECR (Optional)**: For deployment, ensure AWS CLI is configured with proper permissions
@@ -341,7 +340,7 @@ docker-compose run --rm \
 #### Verify Embeddings
 ```bash
 # Check embeddings directory exists and has content
-ls -la OUTPUT_DATA2/emdeddings/
+ls -la OUTPUT_DATA2/embeddings/
 
 # Verify ChromaDB is accessible
 docker-compose run --rm coursegen \
@@ -351,15 +350,15 @@ docker-compose run --rm coursegen \
 #### Backup/Restore Embeddings
 ```bash
 # Create backup
-tar -czf embeddings_backup_$(date +%Y%m%d_%H%M%S).tar.gz OUTPUT_DATA2/emdeddings/
+tar -czf embeddings_backup_$(date +%Y%m%d_%H%M%S).tar.gz OUTPUT_DATA2/embeddings/
 
 # Restore from backup
 tar -xzf embeddings_backup_20250101_120000.tar.gz
 ```
 
 #### Understanding Host vs Image Embeddings
-- **Host directory** (`OUTPUT_DATA2/emdeddings/`): Where regeneration writes during development; rebuild after updating it.
-- **Image embeddings**: Copied into the Docker image at `/app/OUTPUT_DATA2/emdeddings` during `./build.sh`.
+- **Host directory** (`OUTPUT_DATA2/embeddings/`): Where regeneration writes during development; rebuild after updating it.
+- **Image embeddings**: Copied into the Docker image at `/app/OUTPUT_DATA2/embeddings` during `./build.sh`.
 - **AWS ECR image**: The pushed artifact—rebuild & deploy whenever you refresh embeddings locally.
 
 ## Quick Start

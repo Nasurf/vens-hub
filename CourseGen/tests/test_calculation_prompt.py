@@ -60,7 +60,6 @@ def test_calculation_prompt_parses_dollar_wrapped_latex(tmp_path, question_count
     config = QuestionBatchConfig(
         course_code="AAE 331",
         cache_dir=tmp_path,
-        store_firestore=False,
         resume=False,
         request_delay_override=0.0,
         delay_jitter_override=0.0,

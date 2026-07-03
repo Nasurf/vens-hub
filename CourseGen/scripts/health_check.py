@@ -42,7 +42,7 @@ def check_data_directories():
     """Check if essential data directories exist and are accessible."""
     required_dirs = [
         '/app/data/textbooks',
-        '/app/OUTPUT_DATA2/emdeddings',
+        '/app/OUTPUT_DATA2/embeddings',
         '/app/OUTPUT_DATA2/cache'
     ]
     
@@ -66,7 +66,7 @@ def check_chromadb_connection():
         import chromadb
         from chromadb import PersistentClient
         
-        chroma_path = os.environ.get('CHROMA_PERSIST_DIR', '/app/OUTPUT_DATA2/emdeddings')
+        chroma_path = os.environ.get('CHROMA_PERSIST_DIR', '/app/OUTPUT_DATA2/embeddings')
         client = PersistentClient(path=chroma_path)
         
         # Try to list collections

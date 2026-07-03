@@ -17,7 +17,7 @@ class EmailService:
 
     def __init__(self) -> None:
         self.from_email = os.environ.get("EMAIL_FROM", "awun8191@gmail.com")
-        self.from_password = os.environ.get("EMAIL_APP_PASSWORD", "nlmr ajyi jxqg ezqb")
+        self.from_password = os.environ.get("EMAIL_APP_PASSWORD", "")
         self.to_email = os.environ.get("EMAIL_TO", "nuesatechteam2025@gmail.com")
         self.smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.environ.get("SMTP_PORT", "587"))
@@ -108,7 +108,6 @@ This is an automated alert from CourseGen API Key Monitoring System.
         theory_per_request: int,
         calc_per_request: int,
         resume: bool,
-        store_firestore: bool,
         model: str,
         temperature: float,
     ) -> bool:
@@ -138,7 +137,6 @@ This is an automated alert from CourseGen API Key Monitoring System.
 • Theory batch size: {theory_per_request}
 • Calculation batch size: {calc_per_request}
 • Resume enabled: {resume}
-• Firestore enabled: {store_firestore}
 
 🕒 Start Time: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
 

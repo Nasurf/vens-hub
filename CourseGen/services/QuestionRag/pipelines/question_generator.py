@@ -1,4 +1,4 @@
-"""Gemini powered question generation pipeline using RAG + Firestore persistence."""
+"""Gemini powered question generation pipeline using RAG."""
 
 from __future__ import annotations
 
@@ -52,12 +52,6 @@ except ImportError:
 
     config = FallbackConfig()
 
-try:  # pragma: no cover - Firestore is optional in tests
-    from ...Firestore.firebase_service import FireStore  # type: ignore
-except Exception:  # pragma: no cover - keep optional dependency soft
-    FireStore = None  # type: ignore
-
-
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     handler = logging.StreamHandler()
@@ -76,13 +70,11 @@ class QuestionGenerator:
         *,
         gemini_service: Optional[GeminiService] = None,
         rag_client: Optional[ChromaQuery] = None,
-        firestore: Optional[Any] = None,
         use_structured: Optional[bool] = None,
         email_service: Optional[Any] = None,
     ) -> None:
         self.gemini = gemini_service
         self.rag = rag_client or ChromaQuery()
-        self._firestore = firestore
         self._cache_map: Dict[Path, QuestionCache] = {}
         self._course_store: Dict[Path, List[Dict[str, Any]]] = {}
         if use_structured is None:
@@ -204,11 +196,6 @@ class QuestionGenerator:
                 expected_subtopics=len(topic.get("subtopics") or []),
             )
 
-        self._finalize_course_progress(
-            config=config,
-            course=course,
-            progress=progress_cache,
-        )
         return results
 
     # ------------------------------------------------------------------
@@ -452,7 +439,6 @@ class QuestionGenerator:
         subtopic_completed = progress.subtopic_state(topic_title, subtopic_title) == "completed"
         if subtopic_completed:
             if questions and not progress.has_persisted(topic_title, subtopic_title):
-                self._persist_to_firestore(questions, enable=config.store_firestore)
                 progress.mark_persisted(topic_title, subtopic_title)
                 self._cleanup_subtopic_cache(
                     cache=cache,
@@ -573,12 +559,6 @@ class QuestionGenerator:
                         result.topic_title,
                         result.error,
                     )
-
-            self._finalize_course_progress(
-                config=config,
-                course=course,
-                progress=progress_cache,
-            )
 
             return all_questions
 
@@ -903,32 +883,6 @@ class QuestionGenerator:
         
 
 
-    def _persist_to_firestore(self, questions: Iterable[Question], *, enable: bool) -> None:
-        if not enable or not questions:
-            return
-        store = self._resolve_firestore()
-        if store is None:
-            logger.debug("Firestore not configured; skipping persistence")
-            return
-        for question in questions:
-            try:
-                store.set_question(question)
-            except Exception as exc:  # pragma: no cover - network dependent
-                logger.warning("Failed to persist question for %s: %s", question.course_code, exc)
-
-    def _resolve_firestore(self) -> Optional[Any]:
-        if self._firestore is not None:
-            return self._firestore
-        if FireStore is None:
-            return None
-        try:
-            self._firestore = FireStore()
-            return self._firestore
-        except Exception as exc:  # pragma: no cover - optional dependency
-            logger.warning("Could not initialize Firestore: %s", exc)
-            self._firestore = None
-            return None
-
     def _notify_course_started(
         self,
         *,
@@ -1035,98 +989,6 @@ class QuestionGenerator:
         # Update cache.json with batch completion
         cache.mark_batch_completed(course_code, topic_title, subtopic_title, request.name)
 
-    def _finalize_course_progress(
-        self,
-        *,
-        config: QuestionBatchConfig,
-        course: Dict[str, Any],
-        progress: CourseProgressCache,
-    ) -> None:
-        """Update Firestore once a course finishes processing."""
-
-        if not config.store_firestore:
-            return
-
-        try:
-            store = self._resolve_firestore()
-            if not store:
-                return
-
-            normalized_topics = config.normalized_topics()
-            normalized_subtopics = config.normalized_subtopics()
-            target_pairs = list(
-                self._iter_target_subtopics(
-                    course,
-                    normalized_topics,
-                    normalized_subtopics,
-                )
-            )
-
-            if not target_pairs:
-                return
-
-            topics_data = progress.data.get("topics", {})
-            questions_per_subtopic = (
-                progress.theory_target
-                + progress.calc_target
-                + progress.calc_target
-            )
-
-            total_topics = len(target_pairs)
-            completed_topics = 0
-            errored_topics = 0
-            completed_questions = 0
-
-            for topic_name, subtopic_name in target_pairs:
-                topic_entry = topics_data.get(topic_name, {})
-                entry = (
-                    topic_entry.get("subtopics", {})
-                    .get(subtopic_name)
-                )
-                if not entry:
-                    continue
-
-                theory_progress = min(
-                    entry.get("theory_progress", 0),
-                    progress.theory_target,
-                )
-                calc_progress = min(
-                    entry.get("calculation_progress", 0),
-                    progress.calc_target,
-                )
-                calc2_progress = min(
-                    entry.get("calc_progress2", 0),
-                    progress.calc_target,
-                )
-                completed_questions += theory_progress + calc_progress + calc2_progress
-
-                state = entry.get("state", "in_progress")
-                if state == "completed":
-                    completed_topics += 1
-                elif state == "error":
-                    errored_topics += 1
-
-            total_questions = questions_per_subtopic * total_topics
-            completed_questions = min(completed_questions, total_questions)
-
-            if completed_topics < total_topics or errored_topics > 0:
-                # Only record progress once an entire course finishes successfully.
-                return
-
-            store.update_generation_progress(
-                course_code=str(course.get("code", "")),
-                course_title=course.get("title", ""),
-                department=course.get("department", "Unknown"),
-                status="completed",
-                total_topics=total_topics,
-                completed_topics=completed_topics,
-                total_questions=total_questions,
-                completed_questions=completed_questions,
-                errored_topics=errored_topics,
-            )
-        except Exception as exc:
-            logger.warning("Failed to update Firestore progress for %s: %s", course.get("code"), exc)
-
     def _sleep_with_jitter(self, base: float, jitter: float) -> None:
         if base <= 0:
             return
@@ -1203,11 +1065,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Number of calculation questions per Gemini request",
     )
     parser.add_argument("--no-resume", action="store_true", help="Do not reuse cached generations")
-    parser.add_argument(
-        "--skip-firestore",
-        action="store_true",
-        help="Disable persistence to Firestore",
-    )
     parser.add_argument(
         "--topics",
         nargs="*",
@@ -1368,7 +1225,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 theory_per_request=args.theory_per_request,
                 calc_per_request=args.calc_per_request,
                 resume=not args.no_resume,
-                store_firestore=not args.skip_firestore,
                 model=args.model,
                 temperature=args.temperature,
             )
@@ -1387,7 +1243,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "theory_questions_per_request_override": args.theory_per_request,
         "calc_questions_per_request_override": args.calc_per_request,
         "resume": not args.no_resume,
-        "store_firestore": not args.skip_firestore,
         "request_delay_override": args.request_delay,
         "delay_jitter_override": args.delay_jitter,
         "gemini_model_override": args.model,

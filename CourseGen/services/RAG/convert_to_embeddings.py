@@ -528,7 +528,7 @@ def main():
     ap.add_argument("--with-chroma", dest="with_chroma", action="store_true", default=True)
     ap.add_argument("--no-chroma", dest="with_chroma", action="store_false")
     ap.add_argument("-c", "--collection", default="course_embeddings")
-    ap.add_argument("--persist-dir", default=str(default_output_root / "emdeddings"))
+    ap.add_argument("--persist-dir", default=str(default_output_root / "embeddings"))
     ap.add_argument("--ocr-on-missing", choices=["fallback", "error", "skip"], default="fallback")
     ap.add_argument("--force-ocr", action="store_true")
     ap.add_argument("--max-pdfs", type=int, default=0)

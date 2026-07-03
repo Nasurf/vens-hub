@@ -98,7 +98,6 @@ def main(argv: List[str]) -> int:
         theory_questions_per_request_override=args.questions,
         calc_questions_per_request_override=args.questions,
         resume=False,
-        store_firestore=False,
         request_delay_override=0.0,
         delay_jitter_override=0.0,
         request_attempts_override=1,

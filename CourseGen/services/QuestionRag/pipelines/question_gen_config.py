@@ -42,7 +42,6 @@ class QuestionGenerationConfig:
     use_structured: bool = False
     latex_wrap_steps: bool = True
     resume: bool = True
-    store_firestore: bool = True
 
     # Cache settings
     disable_cache_daily_reset: bool = False
@@ -115,7 +114,6 @@ class QuestionGenerationConfig:
             use_structured=_coerce_bool(getattr(config, "coursegen_use_structured", defaults.use_structured), defaults.use_structured),
             latex_wrap_steps=_coerce_bool(getattr(config, "qg_latex_wrap_steps", defaults.latex_wrap_steps), defaults.latex_wrap_steps),
             resume=_coerce_bool(getattr(config, "qg_resume", defaults.resume), defaults.resume),
-            store_firestore=_coerce_bool(getattr(config, "qg_store_firestore", defaults.store_firestore), defaults.store_firestore),
 
             # Cache settings
             disable_cache_daily_reset=_coerce_bool(getattr(config, "qg_disable_cache_daily_reset", defaults.disable_cache_daily_reset), defaults.disable_cache_daily_reset),

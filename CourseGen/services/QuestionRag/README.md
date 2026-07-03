@@ -1,6 +1,6 @@
 # QuestionRag: RAG-Powered Question Generation Pipeline
 
-Generates 30 MCQs per subtopic (20 theory, 10 calc) using Gemini + Chroma RAG, with caching, Firestore persistence, and LaTeX for calculations. All questions grounded in retrieved docs; skips if no context.
+Generates 30 MCQs per subtopic (20 theory, 10 calc) using Gemini + Chroma RAG, with caching and LaTeX for calculations. All questions grounded in retrieved docs; skips if no context.
 
 ## Usage
 - Single course: `python -m services.QuestionRag.gemini_question_gen --generate-questions --course-code EEE301`
@@ -73,7 +73,7 @@ See question_generator.py for additional config options (e.g., rag_topk=30, temp
 
 ### Multi-Worker Architecture
 - **Thread Pool**: Uses `ThreadPoolExecutor` for concurrent topic processing
-- **Resource Safety**: Thread-safe access to API keys, caches, and Firestore
+- **Resource Safety**: Thread-safe access to API keys and caches
 - **Error Isolation**: Individual worker failures don't affect other workers
 - **Progress Tracking**: Real-time progress updates across all workers
 - **Automatic Retry**: Failed workers are automatically retried up to configured limit

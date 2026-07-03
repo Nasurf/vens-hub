@@ -50,18 +50,6 @@ class FakeChromaQuery:
         ]
 
 
-class FakeFireStore:
-    def __init__(self) -> None:
-        self.saved: list[dict] = []
-        self.progress_updates: list[dict] = []
-
-    def set_question(self, question) -> None:  # pragma: no cover - simple container
-        self.saved.append(question)
-
-    def update_generation_progress(self, **payload) -> None:  # pragma: no cover - simple container
-        self.progress_updates.append(payload)
-
-
 def _write_courses(tmp_path: Path) -> Path:
     courses_path = tmp_path / "courses.json"
     courses_path.write_text(
@@ -89,12 +77,9 @@ def test_question_generation_with_cache(tmp_path: Path) -> None:
 
     fake_gemini = FakeGeminiService()
     fake_rag = FakeChromaQuery()
-    fake_store = FakeFireStore()
-
     generator = QuestionGenerator(
         gemini_service=fake_gemini,
         rag_client=fake_rag,
-        firestore=fake_store,
     )
     config = QuestionBatchConfig(
         course_code="EEE 101",
@@ -115,13 +100,11 @@ def test_question_generation_with_cache(tmp_path: Path) -> None:
 
     assert len(results) == 3
     assert len(fake_gemini.calls) == 3
-    assert len(fake_store.saved) == 3
 
     # Second run should reuse cache and avoid additional Gemini calls
     results_again = runner.run(config)
     assert len(results_again) == 0
     assert len(fake_gemini.calls) == 3  # unchanged
-    assert len(fake_store.saved) == 3  # cached questions do not re-persist
 
     calc_questions = [q for q in results if q.question_type == "calculation"]
     assert calc_questions
@@ -135,12 +118,9 @@ def test_generation_skips_when_count_mismatch(tmp_path: Path) -> None:
 
     fake_gemini = FakeGeminiService()
     fake_rag = FakeChromaQuery()
-    fake_store = FakeFireStore()
-
     generator = QuestionGenerator(
         gemini_service=fake_gemini,
         rag_client=fake_rag,
-        firestore=fake_store,
     )
     config = QuestionBatchConfig(
         course_code="EEE 101",

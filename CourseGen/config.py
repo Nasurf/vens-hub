@@ -11,7 +11,6 @@ class Config:
     """Holds configurable paths and credentials for the project."""
 
     # File paths and directories
-    firestore_service_account: str = os.getenv('FIRESTORE_SERVICE_ACCOUNT', r'/home/raregazetto/Downloads/engineering_hub_service_account.json')
     pdf_directory: str = os.getenv('PDF_DIRECTORY', '')
     processed_courses_cache: str = os.getenv('PROCESSED_COURSES_CACHE', '')
     courses_json_path: str = os.getenv('COURSES_JSON_PATH', '')
@@ -92,7 +91,6 @@ class Config:
     qg_theory_questions_per_request: int = int(os.getenv('COURSEGEN_THEORY_PER_REQUEST', '10'))
     qg_calc_questions_per_request: int = int(os.getenv('COURSEGEN_CALC_PER_REQUEST', '5'))
     qg_resume: bool = os.getenv('RESUME', 'true').lower() in ('1', 'true', 'yes')
-    qg_store_firestore: bool = os.getenv('STORE_FIRESTORE', 'true').lower() in ('1', 'true', 'yes')
     qg_request_delay_s: float = float(os.getenv('REQUEST_DELAY', '1.5'))
     qg_delay_jitter: float = float(os.getenv('DELAY_JITTER', '0.25'))
     qg_request_attempts: int = int(os.getenv('REQUEST_ATTEMPTS', '2'))

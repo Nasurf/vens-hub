@@ -33,7 +33,7 @@
 - Up-to-date embeddings in ChromaDB (`convert_to_embeddings` pipeline) with metadata fields such as `DEPARTMENT`, `COURSE_FOLDER`, `LEVEL`, etc.
 - Gemini API keys configured (see `README_api_key_load_balancer.md`).
 - `courses.json` with basic course metadata (code, title, level) so generated outlines can be written back.
-- Optional: Firestore/other services if you extend the pipeline; current script writes locally only.
+- Optional: other services if you extend the pipeline; current script writes locally only.
 
 ## CLI Usage
 ```bash

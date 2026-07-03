@@ -54,7 +54,7 @@ except Exception:
 CHROMA_PATH = (
     os.environ.get("COURSEGEN_PERSIST_DIR")
     or os.environ.get("CHROMA_PERSIST_DIR")
-    or str((REPO_ROOT / "OUTPUT_DATA2/emdeddings").resolve())
+    or str((REPO_ROOT / "OUTPUT_DATA2/embeddings").resolve())
 )
 # Collection default matches convert_to_embeddings.py
 CHROMA_COLLECTION = (
