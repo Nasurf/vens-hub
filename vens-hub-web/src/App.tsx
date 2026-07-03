@@ -657,9 +657,9 @@ function BrandMark({ className = '', label = 'Vens Hub' }: { className?: string;
   return <span aria-label={label} className={cx('brand-logo-mask', className)} role="img" />
 }
 
-function Logo({ compact = false }: { compact?: boolean }) {
+function Logo({ compact = false, className }: { compact?: boolean; className?: string }) {
   return (
-    <Link to={getProfile() ? '/app' : '/'} className={cx('logo-lockup', compact && 'compact')}>
+    <Link to={getProfile() ? '/app' : '/'} className={cx('logo-lockup', compact && 'compact', className)}>
       <span className="logo-mark">
         <BrandMark />
       </span>
@@ -1611,6 +1611,7 @@ function useFlashcardDatabaseSync(userId: string | null) {
 }
 
 function AppShell() {
+  const profile = useProfile()
   const firebaseUser = useFirebaseUser()
   const userId = firebaseUser && firebaseUser !== 'loading' ? firebaseUser.uid : null
   const navigate = useNavigate()
@@ -1638,10 +1639,23 @@ function AppShell() {
         <Menu />
       </button>
       <aside className={cx('sidebar', mobileMenuOpen && 'open')}>
-        <button className="close-mobile" onClick={() => setMobileMenuOpen(false)}>
-          <X />
-        </button>
-        <Logo compact />
+        <div className="sidebar-header">
+          <button className="close-mobile" onClick={() => setMobileMenuOpen(false)}>
+            <X size={20} />
+          </button>
+          <div className="sidebar-user">
+            <div className="sidebar-avatar">
+              {profile?.firstName || profile?.lastName
+                ? `${(profile.firstName[0] ?? '').toUpperCase()}${(profile.lastName[0] ?? '').toUpperCase()}`
+                : <User size={24} />}
+            </div>
+            <div className="sidebar-user-info">
+              <strong>{profile?.firstName || 'Engineer'} {profile?.lastName || ''}</strong>
+              {profile?.email && <span className="sidebar-email">{profile.email}</span>}
+            </div>
+          </div>
+        </div>
+        <Logo compact className="sidebar-logo-desktop" />
         <nav>
           {navItems.map((item) => (
             <NavLink
