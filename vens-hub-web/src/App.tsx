@@ -2615,15 +2615,13 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
 
 /* ─── Schedule helpers ────────────────────────────────────────────────────── */
 
-const SLOT_PX = 48          // pixels per 30-min slot
-const HOUR_PX = SLOT_PX * 2 // 96 px per hour
+const SLOT_PX = 96          // pixels per 2-hr slot
 const SCHEDULE_START = 7     // 07:00
 const SCHEDULE_END = 22     // 22:00
 
 const TIME_SLOTS: string[] = []
-for (let h = SCHEDULE_START; h < SCHEDULE_END; h++) {
+for (let h = SCHEDULE_START; h < SCHEDULE_END; h += 2) {
   TIME_SLOTS.push(`${String(h).padStart(2, '0')}:00`)
-  TIME_SLOTS.push(`${String(h).padStart(2, '0')}:30`)
 }
 
 function timeToMinutes(t: string) {
@@ -2632,11 +2630,11 @@ function timeToMinutes(t: string) {
 }
 
 function eventTop(start: string) {
-  return ((timeToMinutes(start) - SCHEDULE_START * 60) / 30) * SLOT_PX
+  return ((timeToMinutes(start) - SCHEDULE_START * 60) / 120) * SLOT_PX
 }
 
 function eventHeight(start: string, end: string) {
-  return Math.max(((timeToMinutes(end) - timeToMinutes(start)) / 30) * SLOT_PX, SLOT_PX)
+  return Math.max(((timeToMinutes(end) - timeToMinutes(start)) / 120) * SLOT_PX, SLOT_PX)
 }
 
 const TYPE_TONE: Record<string, number> = {
