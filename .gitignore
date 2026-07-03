@@ -34,17 +34,20 @@ node_modules/
 .dataconnect
 
 # Flutter
-.dart_tool/
-.packages
-build/
-.flutter-plugins
-.flutter-plugins-dependencies
+vens_app/.dart_tool/
+vens_app/.packages
+vens_app/build/
+vens_app/.flutter-plugins
+vens_app/.flutter-plugins-dependencies
+vens_app/lib/adaptive/.dart_tool/
+vens_app/lib/adaptive/.flutter-plugins-dependencies
 
 # Generated Flutter platform shells not used by the web hackathon build
-/ios/
-/linux/
-/macos/
-/windows/
+vens_app/ios/
+vens_app/linux/
+vens_app/macos/
+vens_app/windows/
+vens_app/android/build/
 
 # IDE
 .idea/
@@ -68,18 +71,18 @@ Thumbs.db
 # Environment config with API keys
 
 # Firebase generated config (contains API keys)
-android/app/google-services.json
-ios/Runner/GoogleService-Info.plist
-macos/Runner/GoogleService-Info.plist
+vens_app/android/app/google-services.json
+vens_app/ios/Runner/GoogleService-Info.plist
+vens_app/macos/Runner/GoogleService-Info.plist
 
 # dotenv files
 .env
 .env.*
-assets/.env
+vens_app/assets/.env
 
 # Local secrets
 .wrangler/
-android/local.properties
+vens_app/android/local.properties
 *.jks
 *.keystore
 google-services.json
@@ -90,9 +93,9 @@ service-account.json
 service-account*.json
 *-service-account*.json
 *-credentials*.json
-lib/firebase_options.dart
+vens_app/lib/firebase_options.dart
 # Question bank data (large, not source code)
 BANK/
 BANK/.upload_checkpoint.json
-lib/core/config/environment_config.dart
+vens_app/lib/core/config/environment_config.dart
 workers/api/vens-hub-questions-backup.sql

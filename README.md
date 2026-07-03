@@ -45,59 +45,43 @@ Adaptive study platform for engineering students. Uses Bayesian Knowledge Tracin
          └─────────┘
 ```
 
-## What It Does
-
-### For Students
-- **Adaptive Quizzes** — Bayesian Knowledge Tracing tracks mastery per topic
-- **Spaced Repetition** — schedules reviews when you're about to forget
-- **3 Quiz Modes** — multiple choice, theory, gap-fill
-- **AI Assistant** — ask questions, get explanations
-- **Flashcards** — review system with sync across devices
-- **Course Browser** — 426 courses across 9 engineering disciplines
-
-### For the System
-- 142,000 questions with topic, difficulty, options, and explanations
-- 9 engineering departments: Aeronautical, Biomedical, Chemical, Civil, Computer, Electrical, Mechanical, Mechatronics, Petroleum
-- Server-side adaptive engine — BKT computation on the Worker
-- User performance tracking — per-answer logs and per-topic mastery states
-
 ## Project Structure
 
 ```
 vens-hub/
-├── vens-hub-web/          # React web app (Vite + TypeScript)
+├── vens_app/               # Flutter mobile app
+│   ├── lib/                # Dart source (adaptive, core, data, domain, presentation)
+│   ├── android/            # Android platform files
+│   ├── assets/             # Environment config
+│   ├── test/               # Flutter tests
+│   ├── pubspec.yaml
+│   └── configure.sh
+├── vens_web/               # React web app (Vite + TypeScript)
 │   ├── src/
-│   │   ├── App.tsx        # Main app (routing, pages, components)
-│   │   ├── adaptive.ts    # Adaptive learning client
-│   │   ├── flashcards.ts  # Spaced repetition engine
-│   │   ├── firebase.ts    # Firebase auth config
-│   │   └── LatexText.tsx  # LaTeX rendering
-│   ├── wrangler.toml      # Cloudflare Pages deployment
+│   │   ├── App.tsx         # Main app (routing, pages, components)
+│   │   ├── adaptive.ts     # Adaptive learning client
+│   │   ├── flashcards.ts   # Spaced repetition engine
+│   │   ├── firebase.ts     # Firebase auth config
+│   │   └── LatexText.tsx   # LaTeX rendering
+│   ├── wrangler.toml       # Cloudflare Pages deployment
 │   └── package.json
-├── workers/
+├── workers/                # Cloudflare Workers
 │   └── api/
 │       └── src/
-│           ├── index.js   # Worker routes (courses, questions, adaptive, uploads)
-│           └── bkt.js     # Bayesian Knowledge Tracing math
-├── lib/                   # Flutter app (mobile)
-│   ├── adaptive/          # Adaptive engine client (Dart)
-│   ├── core/              # Services, config, DI
-│   ├── data/              # Models, repositories
-│   ├── domain/            # Business logic
-│   └── presentation/      # UI screens, BLoC state
-├── CourseGen/             # Content generation pipeline
+│           ├── index.js    # Worker routes (courses, questions, adaptive, uploads)
+│           └── bkt.js      # Bayesian Knowledge Tracing math
+├── coursegen/              # Content generation pipeline
 │   ├── services/
-│   │   ├── RAG/           # PDF → OCR → Embedding → ChromaDB
-│   │   ├── QuestionRag/   # Question generation via Gemini
-│   │   └── Gemini/        # API client with key load balancing
-│   ├── data/              # Textbooks, course data
-│   └── docs/              # Component documentation
-├── bin/                   # D1 schemas, backfill scripts
-├── docs/                  # Deployment docs
-├── assets/                # Environment config
-├── courses.json           # Course catalog (426 courses)
-├── deploy.sh              # Worker deployment script
-└── configure.sh           # Secret configuration
+│   │   ├── RAG/            # PDF → OCR → Embedding → ChromaDB
+│   │   ├── QuestionRag/    # Question generation via Gemini
+│   │   └── Gemini/         # API client with key load balancing
+│   ├── data/               # Textbooks, course data
+│   └── docs/               # Component documentation
+├── bin/                    # D1 schemas, backfill scripts
+├── docs/                   # Deployment docs
+├── courses.json            # Course catalog (426 courses)
+├── deploy.sh               # Worker deployment script
+└── configure.sh            # Secret configuration (root-level)
 ```
 
 ## Quick Start
@@ -105,7 +89,7 @@ vens-hub/
 ### Web App
 
 ```bash
-cd vens-hub-web
+cd vens_web
 cp env.example .env.local
 # Edit .env.local with your Firebase config
 npm install
@@ -122,6 +106,7 @@ npx wrangler deploy --env=""
 ### Flutter App
 
 ```bash
+cd vens_app
 flutter pub get
 flutter run
 ```
@@ -129,7 +114,7 @@ flutter run
 ### CourseGen (Question Generation)
 
 ```bash
-cd CourseGen
+cd coursegen
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
@@ -220,7 +205,7 @@ PDF Textbooks → OCR → Chunking → Embedding (Cloudflare) → ChromaDB
 ### Web App (Cloudflare Worker)
 
 ```bash
-cd vens-hub-web
+cd vens_web
 npx wrangler deploy
 ```
 
