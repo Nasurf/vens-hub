@@ -823,25 +823,18 @@ function MetricCard({
 }
 
 function CourseCard({ course }: { course: Course }) {
-  const levels = courseLevels(course)
-  const semesters = courseSemesters(course)
   return (
-    <Link to={`/app/courses/${encodeURIComponent(course.code)}`} className="course-card">
-      <div className="course-topline">
-        <span>{course.code}</span>
-        <small>{course.type ?? 'Course'}</small>
-      </div>
-      <h3>{course.title}</h3>
-      <p>{course.description || 'Course details, outlines and quiz questions are available.'}</p>
-      <div className="pill-row">
-        {course.units ? <span>{course.units} units</span> : null}
-        {levels.slice(0, 2).map((level, levelIndex) => (
-          <span key={`${level}-${levelIndex}`}>{level} level</span>
-        ))}
-        {semesters.slice(0, 1).map((semester, semesterIndex) => (
-          <span key={`${semester}-${semesterIndex}`}>{semester}</span>
-        ))}
-        <span>{course.question_count ?? 0} questions</span>
+    <Link
+      to={`/app/courses/${encodeURIComponent(course.code)}`}
+      className="course-card"
+      aria-label={`Open ${course.code}: ${course.title}`}
+    >
+      <span className="course-card-code">{course.code}</span>
+      <h3 className="course-card-title">{course.title}</h3>
+      <div className="course-card-bottom">
+        <span className="course-card-chevron" aria-hidden="true">
+          <ChevronRight size={28} strokeWidth={2.4} />
+        </span>
       </div>
     </Link>
   )
@@ -857,22 +850,15 @@ function courseSummaryTags(course: Partial<Course>) {
   return tags.slice(0, 3)
 }
 
-function CourseJourneyCard({ course, to }: { course: Pick<Course, 'code' | 'title'> & Partial<Pick<Course, 'units' | 'question_count'>>; to: string }) {
-  const tags = courseSummaryTags(course)
+function CourseJourneyCard({ course, to }: { course: Pick<Course, 'code' | 'title'>; to: string }) {
   return (
-    <Link className="course-journey-card" to={to}>
-      <div className="course-journey-icon">
-        <GraduationCap size={22} />
-      </div>
-      <div className="course-journey-copy">
-        <span>{course.code}</span>
-        <h3>{course.title}</h3>
-        <div className="course-journey-tags">
-          {tags.map((tag) => <small key={tag}>{tag}</small>)}
-        </div>
-      </div>
-      <div className="course-journey-cta">
-        Review <ChevronRight size={17} />
+    <Link className="course-journey-card" to={to} aria-label={`Open ${course.code}: ${course.title}`}>
+      <span className="course-card-code">{course.code}</span>
+      <h3 className="course-card-title">{course.title}</h3>
+      <div className="course-card-bottom">
+        <span className="course-card-chevron" aria-hidden="true">
+          <ChevronRight size={28} strokeWidth={2.4} />
+        </span>
       </div>
     </Link>
   )
@@ -1755,7 +1741,6 @@ function AppShell() {
     { to: '/app/hub', label: 'Hub', icon: <Layers3 size={22} /> },
     { to: '/app/study', label: 'Flashcards', icon: <BookOpen size={22} /> },
     { to: '/app/courses', label: 'Courses', icon: <GraduationCap size={22} /> },
-    { to: '/app/streaks', label: 'Streaks', icon: <Flame size={22} /> },
     { to: '/app/profile', label: 'Profile', icon: <CircleUserRound size={22} /> },
   ]
 
@@ -2153,8 +2138,8 @@ function CourseDetailPage() {
 
   return (
     <div className="page-stack">
-      <Link className="back-link" to="/app/courses">
-        <ArrowLeft size={18} /> Back to courses
+      <Link className="back-link" to="/app">
+        <ArrowLeft size={18} />
       </Link>
       <section className="course-detail-hero">
         <div>
@@ -2274,8 +2259,8 @@ function QuizSetupPage() {
 
   return (
     <div className="page-stack narrow quiz-setup">
-      <Link className="back-link" to={topicParam ? `/app/courses/${encodeURIComponent(code)}` : '/app/courses'}>
-        <ArrowLeft size={18} /> {topicParam ? 'Back to course' : 'Back to courses'}
+      <Link className="back-link" to="/app">
+        <ArrowLeft size={18} />
       </Link>
       <CourseEmbarkCard course={course} questionCount={topicQuestions.length} />
       <section className="quiz-setup-card">
@@ -3860,7 +3845,7 @@ function StreaksPage() {
   return (
     <div className="page-stack narrow streaks-page">
       <Link className="back-link" to="/app">
-        <ArrowLeft size={18} /> Back to dashboard
+        <ArrowLeft size={18} />
       </Link>
       <PageHeader title="Streaks" />
       <div className="streak-tabs" role="tablist" aria-label="Streak views">
@@ -3986,7 +3971,7 @@ function CourseAnalyticsPage() {
 
   return (
     <div className="page-stack">
-      <button className="ghost-button inline-back" onClick={() => navigate('/app/hub')}><ArrowLeft size={16} /> Back to Hub</button>
+      <button className="ghost-button inline-back" onClick={() => navigate('/app')}><ArrowLeft size={16} /></button>
       <PageHeader eyebrow="Course analytics" title={title}>Detailed adaptive learning progress, mastery movement, strengths, and topics that need attention.</PageHeader>
       {loading && <LoadingState label="Loading course analytics..." />}
       {error && !loading && <ErrorState message={error} />}

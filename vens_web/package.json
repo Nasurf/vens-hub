@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "smoke": "node scripts/smoke.cjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "NODE_OPTIONS=--dns-result-order=ipv4first npx wrangler@4.107.0 deploy"
   },
   "dependencies": {
     "@types/katex": "^0.16.8",
