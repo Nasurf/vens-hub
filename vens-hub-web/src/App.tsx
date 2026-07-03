@@ -21,7 +21,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   CircleUserRound,
   ClipboardList,
   Eye,
@@ -3067,22 +3066,19 @@ function FlashcardCardUI({
   now: string
   onRate: (rating: ReviewRating) => void
 }) {
-  const [showExplanation, setShowExplanation] = useState(false)
+  const [isFlipped, setIsFlipped] = useState(false)
+  const [showExplanationPopup, setShowExplanationPopup] = useState(false)
   const [aiExplanation, setAiExplanation] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [rated, setRated] = useState(false)
-  const [swipeDir, setSwipeDir] = useState<'left' | 'right' | null>(null)
-
-  // Touch swipe state
-  const touchStartX = useRef(0)
-  const touchStartY = useRef(0)
-  const SWIPE_THRESHOLD = 60
 
   const { latestAttempt: a, state, retention } = card
   const dueLabel = getDueLabel(state, now)
   const strengthLabel = getStrengthLabel(retention, state)
   const retentionPct = Math.round(retention * 100)
+
+  const hasExplanation = !!(a.explanation || a.solutionSteps.length > 0)
 
   async function handleAskAI() {
     if (aiLoading || aiExplanation) return
@@ -3111,175 +3107,204 @@ Explain the concept clearly and briefly, then point out the key reasoning step.`
     onRate(rating)
   }
 
-  // Touch swipe handlers
-  function onTouchStart(e: React.TouchEvent) {
-    touchStartX.current = e.touches[0].clientX
-    touchStartY.current = e.touches[0].clientY
-    setSwipeDir(null)
-  }
-
-  function onTouchMove(e: React.TouchEvent) {
-    if (rated) return
-    const dx = e.touches[0].clientX - touchStartX.current
-    const dy = e.touches[0].clientY - touchStartY.current
-    // Only trigger for horizontal swipes (dx > dy)
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
-      setSwipeDir(dx > 0 ? 'right' : 'left')
-    } else {
-      setSwipeDir(null)
-    }
-  }
-
-  function onTouchEnd() {
-    if (rated || !swipeDir) return
-    if (swipeDir === 'right') {
-      handleRate('good')
-    } else {
-      handleRate('again')
-    }
-    setSwipeDir(null)
+  function handleFlip() {
+    if (!rated) setIsFlipped((f) => !f)
   }
 
   return (
-    <article
-      className={`flashcard-card${swipeDir ? ` swiping-${swipeDir}` : ''}`}
-      data-card-index={index}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
-      {index === 0 && !rated && (
-        <div className="flashcard-swipe-hint">
-          Swipe right = Good · Swipe left = Again
-        </div>
-      )}
-      <div className="flashcard-card-header">
-        <div className="flashcard-meta">
-          <span className="flashcard-course">{a.courseCode}</span>
-          <span className="flashcard-topic">{a.topicName}</span>
-        </div>
-        <div className="flashcard-badges">
-          <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
-            {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-            {a.isCorrect ? 'Correct' : 'Incorrect'}
-          </span>
-          <span className={cx('flashcard-strength-badge', strengthLabel.toLowerCase())}>
-            {strengthLabel}
-          </span>
-        </div>
-      </div>
-
-      <div className="flashcard-question">
-        <h3><LatexText text={a.questionText} /></h3>
-      </div>
-
-      <div className="flashcard-answers">
-        <div className="flashcard-answer-row student">
-          <strong>Your answer:</strong>
-          <span><LatexText text={a.selectedAnswerText || '(no answer)'} /></span>
-        </div>
-        <div className="flashcard-answer-row correct">
-          <strong>Correct answer:</strong>
-          <span><LatexText text={a.correctAnswerText || '(unavailable)'} /></span>
-        </div>
-      </div>
-
-      <div className="flashcard-due-info">
-        <Clock3 size={14} />
-        <span>{dueLabel}</span>
-        <span className="flashcard-retention">Retention: {retentionPct}%</span>
-        <span className="flashcard-date">Answered {new Date(a.answeredAt).toLocaleDateString()}</span>
-      </div>
-
-      {/* Explanation toggle */}
-      {(a.explanation || a.solutionSteps.length > 0) && (
-        <button className="ghost-button full flashcard-explain-toggle" onClick={() => setShowExplanation(!showExplanation)}>
-          {showExplanation ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          {showExplanation ? 'Hide explanation' : 'Show explanation'}
-        </button>
-      )}
-
-      {showExplanation && (
-        <div className="flashcard-explanation">
-          {a.explanation && (
-            <div className="explanation-text">
-              <strong>Explanation:</strong>
-              <p><LatexText text={a.explanation} /></p>
-            </div>
-          )}
-          {a.solutionSteps.length > 0 && (
-            <div className="explanation-steps">
-              <strong>Solution steps:</strong>
-              <ol>
-                {a.solutionSteps.map((step, i) => (
-                  <li key={i}><LatexText text={step} /></li>
-                ))}
-              </ol>
-            </div>
-          )}
-          {!a.explanation && a.solutionSteps.length === 0 && (
-            <p className="explanation-fallback">No detailed explanation is available for this question.</p>
-          )}
-        </div>
-      )}
-
-      {/* AI explanation */}
-      <button
-        className="ghost-button full flashcard-ai-btn"
-        onClick={handleAskAI}
-        disabled={aiLoading}
+    <>
+      <article
+        className={`flashcard-card${isFlipped ? ' flipped' : ''}`}
+        data-card-index={index}
+        onClick={handleFlip}
       >
-        <Sparkles size={16} />
-        {aiLoading ? 'Getting AI explanation...' : aiExplanation ? 'Ask AI again' : 'Ask AI to explain'}
-      </button>
-
-      {aiExplanation && (
-        <div className="flashcard-ai-response">
-          <div className="flashcard-ai-header">
-            <Bot size={16} />
-            <strong>AI Explanation</strong>
+        <div className="flashcard-card-inner">
+          {/* === FRONT === */}
+          <div className="flashcard-face flashcard-face-front">
+            {index === 0 && !rated && (
+              <div className="flashcard-tap-hint">
+                Tap to reveal answer
+              </div>
+            )}
+            <div className="flashcard-card-header">
+              <div className="flashcard-meta">
+                <span className="flashcard-course">{a.courseCode}</span>
+                <span className="flashcard-topic">{a.topicName}</span>
+              </div>
+              <div className="flashcard-badges">
+                <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
+                  {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {a.isCorrect ? 'Correct' : 'Incorrect'}
+                </span>
+                <span className={cx('flashcard-strength-badge', strengthLabel.toLowerCase())}>
+                  {strengthLabel}
+                </span>
+              </div>
+            </div>
+            <div className="flashcard-question">
+              <h3><LatexText text={a.questionText} /></h3>
+            </div>
+            {!rated && (
+              <div className="flashcard-front-footer">
+                <div className="flashcard-due-info">
+                  <Clock3 size={14} />
+                  <span>{dueLabel}</span>
+                  <span className="flashcard-retention">Retention: {retentionPct}%</span>
+                </div>
+                <div className="flashcard-flip-indicator">
+                  <RotateCcw size={16} />
+                  <span>Tap to flip</span>
+                </div>
+              </div>
+            )}
           </div>
-          <p>{aiExplanation}</p>
-        </div>
-      )}
 
-      {aiError && (
-        <div className="flashcard-ai-response error">
-          <AlertCircle size={14} />
-          <p>{aiError}</p>
-        </div>
-      )}
+          {/* === BACK === */}
+          <div className="flashcard-face flashcard-face-back" onClick={(e) => e.stopPropagation()}>
+            <div className="flashcard-card-header">
+              <div className="flashcard-meta">
+                <span className="flashcard-course">{a.courseCode}</span>
+                <span className="flashcard-topic">{a.topicName}</span>
+              </div>
+              <div className="flashcard-badges">
+                <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
+                  {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {a.isCorrect ? 'Correct' : 'Incorrect'}
+                </span>
+              </div>
+            </div>
 
-      {/* Review rating buttons */}
-      <div className="flashcard-rating-actions">
-        {rated ? (
-          <div className="flashcard-rated-msg">
-            <CheckCircle2 size={16} />
-            <span>Reviewed! Scroll for next card.</span>
+            <div className="flashcard-answers">
+              <div className="flashcard-answer-row student">
+                <strong>Your answer:</strong>
+                <span><LatexText text={a.selectedAnswerText || '(no answer)'} /></span>
+              </div>
+              <div className="flashcard-answer-row correct">
+                <strong>Correct answer:</strong>
+                <span><LatexText text={a.correctAnswerText || '(unavailable)'} /></span>
+              </div>
+            </div>
+
+            <div className="flashcard-due-info">
+              <Clock3 size={14} />
+              <span>{dueLabel}</span>
+              <span className="flashcard-retention">Retention: {retentionPct}%</span>
+              <span className="flashcard-date">Answered {new Date(a.answeredAt).toLocaleDateString()}</span>
+            </div>
+
+            {/* Explanation button — opens popup */}
+            {hasExplanation && (
+              <button className="ghost-button full flashcard-explain-popup-btn" onClick={() => setShowExplanationPopup(true)}>
+                <BookOpen size={16} />
+                Show explanation
+              </button>
+            )}
+
+            {/* AI explanation */}
+            <button
+              className="ghost-button full flashcard-ai-btn"
+              onClick={handleAskAI}
+              disabled={aiLoading}
+            >
+              <Sparkles size={16} />
+              {aiLoading ? 'Getting AI explanation...' : aiExplanation ? 'Ask AI again' : 'Ask AI to explain'}
+            </button>
+
+            {aiExplanation && (
+              <div className="flashcard-ai-response">
+                <div className="flashcard-ai-header">
+                  <Bot size={16} />
+                  <strong>AI Explanation</strong>
+                </div>
+                <p>{aiExplanation}</p>
+              </div>
+            )}
+
+            {aiError && (
+              <div className="flashcard-ai-response error">
+                <AlertCircle size={14} />
+                <p>{aiError}</p>
+              </div>
+            )}
+
+            {/* Review rating buttons */}
+            <div className="flashcard-rating-actions">
+              {rated ? (
+                <div className="flashcard-rated-msg">
+                  <CheckCircle2 size={16} />
+                  <span>Reviewed! Scroll for next card.</span>
+                </div>
+              ) : (
+                <>
+                  <span className="flashcard-rate-label">How well did you remember?</span>
+                  <div className="flashcard-rate-buttons">
+                    <button className="rate-btn again" onClick={() => handleRate('again')}>
+                      <RotateCcw size={14} />
+                      Again
+                    </button>
+                    <button className="rate-btn hard" onClick={() => handleRate('hard')}>
+                      Hard
+                    </button>
+                    <button className="rate-btn good" onClick={() => handleRate('good')}>
+                      Good
+                    </button>
+                    <button className="rate-btn easy" onClick={() => handleRate('easy')}>
+                      <Sparkles size={14} />
+                      Easy
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Flip back button */}
+            {!rated && (
+              <button className="ghost-button full flashcard-flip-back-btn" onClick={handleFlip}>
+                <RotateCcw size={16} />
+                Flip back to question
+              </button>
+            )}
           </div>
-        ) : (
-          <>
-            <span className="flashcard-rate-label">How well did you remember?</span>
-            <div className="flashcard-rate-buttons">
-              <button className="rate-btn again" onClick={() => handleRate('again')}>
-                <RotateCcw size={14} />
-                Again
-              </button>
-              <button className="rate-btn hard" onClick={() => handleRate('hard')}>
-                Hard
-              </button>
-              <button className="rate-btn good" onClick={() => handleRate('good')}>
-                Good
-              </button>
-              <button className="rate-btn easy" onClick={() => handleRate('easy')}>
-                <Sparkles size={14} />
-                Easy
+        </div>
+      </article>
+
+      {/* === EXPLANATION POPUP OVERLAY === */}
+      {showExplanationPopup && (
+        <div className="flashcard-popup-overlay" onClick={() => setShowExplanationPopup(false)}>
+          <div className="flashcard-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="flashcard-popup-header">
+              <div className="flashcard-popup-title">
+                <BookOpen size={18} />
+                <strong>Explanation</strong>
+              </div>
+              <button className="ghost-button icon-only" onClick={() => setShowExplanationPopup(false)} aria-label="Close explanation">
+                <X size={18} />
               </button>
             </div>
-          </>
-        )}
-      </div>
-    </article>
+            <div className="flashcard-popup-body">
+              {a.explanation && (
+                <div className="explanation-text">
+                  <p><LatexText text={a.explanation} /></p>
+                </div>
+              )}
+              {a.solutionSteps.length > 0 && (
+                <div className="explanation-steps">
+                  <strong>Solution steps:</strong>
+                  <ol>
+                    {a.solutionSteps.map((step, i) => (
+                      <li key={i}><LatexText text={step} /></li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {!a.explanation && a.solutionSteps.length === 0 && (
+                <p className="explanation-fallback">No detailed explanation is available for this question.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
