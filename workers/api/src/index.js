@@ -211,15 +211,20 @@ async function handleAssistant(request, env) {
     ];
   }
 
-  // Inject context into the last user message so the model always knows the question
+  // Inject context into every user message so the model always knows the question,
+  // even in multi-turn conversations where the original context message has scrolled away
   if (context) {
-    let lastUserIdx = -1;
-    for (let i = contents.length - 1; i >= 0; i--) {
-      if (contents[i].role === 'user') { lastUserIdx = i; break; }
-    }
-    if (lastUserIdx !== -1) {
-      contents[lastUserIdx].parts[0].text =
-        `[Question context for this session]\n${context}\n\n[Student message]\n${contents[lastUserIdx].parts[0].text}`;
+    const ctxBlock = `[Question context]\n${context}`;
+    for (let i = 0; i < contents.length; i++) {
+      if (contents[i].role === 'user') {
+        const text = contents[i].parts?.[0]?.text || '';
+        if (!text.includes('[Question context]')) {
+          contents[i] = {
+            role: 'user',
+            parts: [{ text: `${ctxBlock}\n\n${text}` }],
+          };
+        }
+      }
     }
   }
 
@@ -244,7 +249,7 @@ async function handleAssistant(request, env) {
     headers: { 'Content-Type': 'application/json', 'X-goog-api-key': env.GEMINI_API_KEY },
     body: JSON.stringify({
       contents,
-      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+      generationConfig: { temperature: 0.35, maxOutputTokens: *** },
     }),
   });
 
