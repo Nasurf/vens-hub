@@ -1314,10 +1314,10 @@ label {
 .course-journey-grid > .course-journey-card:nth-child(6) { animation-delay: 175ms; }
 
 .course-journey-card {
-  align-items: center;
   display: grid;
-  gap: 1rem;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
   min-height: 132px;
   padding: 1rem;
   transition: transform 180ms var(--ease-out), border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
@@ -1399,6 +1399,10 @@ label {
   display: flex;
   font-weight: 900;
   gap: 0.25rem;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
 }
 
 .course-embark-card {

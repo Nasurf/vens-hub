@@ -882,11 +882,11 @@ function CourseJourneyCard({ course, to }: { course: Pick<Course, 'code' | 'titl
         <span>{course.code}</span>
         <h3>{course.title}</h3>
         <div className="course-journey-tags">
-          {(tags.length ? tags : ['Ready to learn']).map((tag) => <small key={tag}>{tag}</small>)}
+          {tags.map((tag) => <small key={tag}>{tag}</small>)}
         </div>
       </div>
       <div className="course-journey-cta">
-        Start <ChevronRight size={17} />
+        Review <ChevronRight size={17} />
       </div>
     </Link>
   )
