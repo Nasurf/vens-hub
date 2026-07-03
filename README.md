@@ -1,167 +1,273 @@
 # Vens Hub
 
-Collaborative learning platform for Nigerian engineering students. Built for BuildVerse hackathon.
+Adaptive study platform for engineering students. Uses Bayesian Knowledge Tracing and spaced repetition to help students learn smarter, not harder.
 
-**Stack:** Flutter (mobile + web) · Cloudflare Workers API · D1 database · Firebase Auth
+**Built for BuildVerse 2026 · The John Amhanesi Foundation**
 
-## Quick links
+## Live
 
-- **API docs:** [`workers/api/README.md`](workers/api/README.md)
-- **D1 schema:** [`bin/d1_schema.sql`](bin/d1_schema.sql), [`bin/d1_migration_performance.sql`](bin/d1_migration_performance.sql)
-- **Adaptive engine:** [`lib/adaptive/`](lib/adaptive/) — BKT-based (server-authoritative)
-- **Worker source:** [`workers/api/src/index.js`](workers/api/src/index.js)
+- **Web app:** [venshub.nasurf25.workers.dev](https://venshub.nasurf25.workers.dev)
+- **API:** [vens-hub-api.nasurf25.workers.dev](https://vens-hub-api.nasurf25.workers.dev)
+
+## Stack
+
+| Layer | Technology |
+|-------|------------|
+| Mobile | Flutter |
+| Web | React + Vite + TypeScript |
+| API | Cloudflare Workers |
+| Database | Cloudflare D1 (142K questions, 426 courses) |
+| Storage | Cloudflare R2 (study materials) |
+| Auth | Firebase Auth (email + Google) |
+| AI | Google Gemini (assistant) |
+| Content Generation | CourseGen (PDF → OCR → RAG → Questions) |
 
 ## Architecture
 
 ```
-Web UI ──┐
-         ├── HTTP ──▶ Cloudflare Worker ──▶ D1 (questions, courses, user stats)
-Flutter ─┘              │
-                        └── Firebase Auth (login only — email + Google)
+┌─────────────┐
+│  Flutter App │
+└──────┬──────┘
+       │
+┌──────┴──────┐     ┌──────────────────┐
+│  React Web  │────▶│ Cloudflare Worker │
+└─────────────┘     │   (API + BKT)    │
+                    └────────┬─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+         ┌────┴────┐  ┌─────┴─────┐  ┌────┴────┐
+         │   D1    │  │    R2     │  │ Firebase │
+         │(courses,│  │ (uploads) │  │  (auth)  │
+         │questions│  └───────────┘  └─────────┘
+         │ user    │
+         │ stats)  │
+         └─────────┘
 ```
 
-- All data (questions, courses, user performance) lives on **Cloudflare D1**
-- Adaptive engine runs **server-side** — BKT computation on the Worker
-- **Firebase Auth** handles login only — the Worker receives the Firebase UID via `X-User-Id` header
-- No Firebase Firestore dependency for backend data
+## What It Does
 
-## Setup
+### For Students
+- **Adaptive Quizzes** — Bayesian Knowledge Tracing tracks mastery per topic
+- **Spaced Repetition** — schedules reviews when you're about to forget
+- **3 Quiz Modes** — multiple choice, theory, gap-fill
+- **AI Assistant** — ask questions, get explanations
+- **Flashcards** — review system with sync across devices
+- **Course Browser** — 426 courses across 9 engineering disciplines
 
-### Environment
+### For the System
+- 142,000 questions with topic, difficulty, options, and explanations
+- 9 engineering departments: Aeronautical, Biomedical, Chemical, Civil, Computer, Electrical, Mechanical, Mechatronics, Petroleum
+- Server-side adaptive engine — BKT computation on the Worker
+- User performance tracking — per-answer logs and per-topic mastery states
 
-Copy `assets/.env.example` to `assets/.env` and fill in the values.
+## Project Structure
 
-### Flutter
+```
+vens-hub/
+├── vens-hub-web/          # React web app (Vite + TypeScript)
+│   ├── src/
+│   │   ├── App.tsx        # Main app (routing, pages, components)
+│   │   ├── adaptive.ts    # Adaptive learning client
+│   │   ├── flashcards.ts  # Spaced repetition engine
+│   │   ├── firebase.ts    # Firebase auth config
+│   │   └── LatexText.tsx  # LaTeX rendering
+│   ├── wrangler.toml      # Cloudflare Pages deployment
+│   └── package.json
+├── workers/
+│   └── api/
+│       └── src/
+│           ├── index.js   # Worker routes (courses, questions, adaptive, uploads)
+│           └── bkt.js     # Bayesian Knowledge Tracing math
+├── lib/                   # Flutter app (mobile)
+│   ├── adaptive/          # Adaptive engine client (Dart)
+│   ├── core/              # Services, config, DI
+│   ├── data/              # Models, repositories
+│   ├── domain/            # Business logic
+│   └── presentation/      # UI screens, BLoC state
+├── CourseGen/             # Content generation pipeline
+│   ├── services/
+│   │   ├── RAG/           # PDF → OCR → Embedding → ChromaDB
+│   │   ├── QuestionRag/   # Question generation via Gemini
+│   │   └── Gemini/        # API client with key load balancing
+│   ├── data/              # Textbooks, course data
+│   └── docs/              # Component documentation
+├── bin/                   # D1 schemas, backfill scripts
+├── docs/                  # Deployment docs
+├── assets/                # Environment config
+├── courses.json           # Course catalog (426 courses)
+├── deploy.sh              # Worker deployment script
+└── configure.sh           # Secret configuration
+```
+
+## Quick Start
+
+### Web App
+
+```bash
+cd vens-hub-web
+cp env.example .env.local
+# Edit .env.local with your Firebase config
+npm install
+npm run dev
+```
+
+### API (Worker)
+
+```bash
+cd workers/api
+npx wrangler deploy --env=""
+```
+
+### Flutter App
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-### Worker deployment
+### CourseGen (Question Generation)
 
 ```bash
-# Quick deploy
-./deploy.sh
+cd CourseGen
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with API keys
 
-# Or manually
-cd workers/api
-npx wrangler deploy --env=""
+# Generate embeddings from textbooks
+python -m services.RAG.convert_to_embeddings \
+  -i data/textbooks/COMPILATION/EEE \
+  --with-chroma \
+  -c pdfs_bge_m3_cloudflare \
+  --workers 4 --resume
+
+# Generate questions
+python -m services.QuestionRag.pipelines.question_generator \
+  --theory-per-request 10 --calc-per-request 5
 ```
 
-### Configure environment
+## Adaptive Learning Engine
 
-```bash
-# Configure secrets (Gemini API key, upload signing secret)
-./configure.sh
-```
+Uses **Bayesian Knowledge Tracing (BKT)** — a machine learning algorithm that models student knowledge as a hidden state and updates it after every answer.
 
-### D1 migrations
+### How It Works
 
-```bash
-# Apply performance tables to dev
-npx wrangler d1 execute vens-hub-questions --file=../../bin/d1_migration_performance.sql
-# Apply to production
-npx wrangler d1 execute vens-hub-questions --file=../../bin/d1_migration_performance.sql --remote
-```
-
-### Backfill questions
-
-If courses are missing questions in D1:
-
-```bash
-cd bin
-python3 backfill_questions.py
-```
-
-For full deployment documentation, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-## Adaptive Learning
-
-The adaptive engine uses **Bayesian Knowledge Tracing (BKT)**:
-
-- **Stateless** — client sends current KC state, Worker runs BKT, returns updated state
-- **Persistent** — every answer is logged in `user_attempts` + per-KC mastery in `user_mastery`
-- **Local cache** — Flutter caches KC states in `get_storage` for fast offline access
-- **Server authority** — Worker is always the source of truth for mastery computation
-
-### Data flow
-
-1. User answers a question
-2. Flutter sends `POST /adaptive/submit-answer` with `{ questionId, selectedAnswerIndex, attemptId, kcState? }`
+1. Student answers a question
+2. Client sends `POST /adaptive/submit-answer` with `{ questionId, selectedAnswerIndex, attemptId, kcState }`
 3. Worker looks up question in D1, computes correctness, runs BKT
 4. Worker persists attempt log + upserts mastery state to D1
-5. Returns `{ isCorrect, masteryBefore, masteryAfter, updatedKcState, explanation }`
+5. Returns `{ isCorrect, masteryBefore, masteryAfter, updatedKcState }`
 
-### Quiz completion sync
+### BKT Parameters
 
-When a quiz ends, `AdaptiveService.submitBatch()` sends per-topic results to the Worker, which runs BKT and persists. This ensures every quiz session is recorded even if individual answer submissions don't happen.
+- **P(L0)** — prior probability of knowing the skill
+- **P(T)** — transition probability (learning rate)
+- **P(S)** — slip probability (know but get wrong)
+- **P(G)** — guess probability (don't know but get right)
 
-## Project structure
+### Spaced Repetition
 
-```
-lib/
-├── adaptive/           # Adaptive engine client (Dart package)
-│   └── lib/src/
-│       ├── adaptive_service.dart   # HTTP client for Worker endpoints
-│       ├── adaptive_types.dart     # Response/request models
-│       └── adaptive_fixtures.dart  # Test fixtures
-├── core/
-│   ├── config/         # Environment config
-│   ├── services/
-│   │   ├── adaptive/   # AdaptiveStorageService (get_storage cache)
-│   │   ├── auth/       # FirebaseAuthService
-│   │   ├── data/       # FireStoreServices (timetables, events)
-│   │   ├── storage/    # Cloudflare R2, Firebase Storage
-│   │   └── analytics/  # Firebase Analytics wrapper
-│   └── di/             # Dependency injection
-├── data/
-│   ├── auth/           # Auth repository
-│   ├── models/         # UserModel, CourseInfo, Question
-│   └── datasources/    # Remote data sources
-├── domain/             # Domain layer (business logic)
-└── presentation/
-    ├── blocs/          # BLoC state management
-    │   ├── auth/       # AuthBloc
-    │   ├── quiz/       # QuizBloc
-    │   └── home/       # HomeController (GetX)
-    ├── screens/        # UI screens
-    └── widgets/        # Shared widgets
+Flashcard system uses SM-2 algorithm variants:
+- Tracks stability, ease factor, repetitions, and lapses
+- Schedules next review based on performance history
+- Syncs across devices via D1
 
-workers/
-└── api/
-    └── src/
-        ├── index.js    # Worker entry point (all routes)
-        └── bkt.js      # BKT math engine
-```
+## D1 Schema
 
-## D1 schema
-
-### Questions & Courses (static data)
+### Static Data
 
 ```sql
-courses     -- 426 engineering courses, indexed by code
-departments -- 9 engineering departments (AER, BIO, CHE, CIV, COM, ELE, MEC, MCT, PET)
+courses     -- 426 engineering courses
+departments -- 9 departments (AER, BIO, CHE, CIV, COM, ELE, MEC, MCT, PET)
 questions   -- ~142K questions with topic, difficulty, options, explanations
 ```
 
-### User Performance (dynamic data)
+### User Performance
 
 ```sql
-user_attempts -- Per-answer log (pk: uuid, indexed by user+course+created_at)
-user_mastery  -- Per-KC mastery state (pk: user_id, course_code, topic_name)
+user_attempts        -- Per-answer log (uuid, user, course, topic, correctness)
+user_mastery         -- Per-topic mastery state (mastery_prob, s_parameter, status)
+user_flashcard_attempts  -- Flashcard answer history
+user_flashcard_states    -- Spaced repetition state per card
 ```
+
+## CourseGen Pipeline
+
+The question bank was generated using CourseGen — a pipeline that processes educational materials into questions:
+
+```
+PDF Textbooks → OCR → Chunking → Embedding (Cloudflare) → ChromaDB
+                                                              │
+                                                              ▼
+                                    Course Outlines ← RAG Retrieval
+                                          │
+                                          ▼
+                              Question Generation (Gemini)
+                                          │
+                                          ▼
+                                    D1 Database
+```
+
+- Processes scanned and digital textbooks
+- Uses RAG to retrieve relevant content for each subtopic
+- Generates theory and calculation questions with explanations
+- Supports resumable processing and cost tracking
+- Deployed via Docker + AWS ECR
 
 ## Deployment
 
-### Worker
+### Web App (Cloudflare Worker)
 
 ```bash
+cd vens-hub-web
+npx wrangler deploy
+```
+
+### API Worker
+
+```bash
+./deploy.sh
+# Or manually:
 cd workers/api
 npx wrangler deploy --env=""
 ```
 
-### D1
+### D1 Migrations
 
 ```bash
-wrangler d1 execute vens-hub-questions --remote --file=path/to/schema.sql
+npx wrangler d1 execute vens-hub-questions --remote --file=bin/d1_migration_performance.sql
 ```
+
+## Environment Variables
+
+### Worker API
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENROUTER_API_KEY` | Embedding provider |
+| `API_KEY` | X-API-Key auth header |
+| `APPWRITE_ENDPOINT` | Appwrite endpoint |
+| `APPWRITE_PROJECT_ID` | Appwrite project |
+| `APPWRITE_API_KEY` | Appwrite server key |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Vectorize |
+| `GEMINI_API_KEY` | AI assistant |
+| `UPLOAD_SIGNING_SECRET` | R2 upload signing |
+| `PAYSTACK_SECRET_KEY` | Payments |
+
+### Web App (.env.local)
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_API_BASE_URL` | Worker API URL |
+| `VITE_FIREBASE_API_KEY` | Firebase web config |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project |
+
+## Team
+
+Built by **Nasurf** — full-stack developer.
+
+## License
+
+MIT

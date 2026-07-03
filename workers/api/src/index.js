@@ -249,7 +249,7 @@ async function handleAssistant(request, env) {
     headers: { 'Content-Type': 'application/json', 'X-goog-api-key': env.GEMINI_API_KEY },
     body: JSON.stringify({
       contents,
-      generationConfig: { temperature: 0.35, maxOutputTokens: *** },
+      generationConfig: { temperature: 0.35, maxOutputTokens: 8192 },
     }),
   });
 

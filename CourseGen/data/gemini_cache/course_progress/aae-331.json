@@ -1,0 +1,46 @@
+{
+  "course": "AAE 331",
+  "topics": {
+    "Airworthiness Fundamentals": {
+      "subtopics": {
+        "Airworthiness Regulations": {
+          "theory_progress": 10,
+          "calculation_progress": 5,
+          "calc_progress2": 5,
+          "state": "completed",
+          "persisted": true,
+          "last_updated": 1758878179.9599116,
+          "completed_at": 1758878166.4741676
+        },
+        "Aircraft Certification": {
+          "theory_progress": 10,
+          "calculation_progress": 5,
+          "calc_progress2": 5,
+          "state": "completed",
+          "persisted": true,
+          "last_updated": 1758878267.4620595,
+          "completed_at": 1758878256.3880522
+        },
+        "Maintenance Requirements": {
+          "theory_progress": 10,
+          "calculation_progress": 5,
+          "calc_progress2": 5,
+          "state": "completed",
+          "persisted": true,
+          "last_updated": 1758879279.9148946,
+          "last_failed_request": "calculation-2",
+          "completed_at": 1758879278.0597901
+        },
+        "Inspection Procedures": {
+          "theory_progress": 10,
+          "calculation_progress": 5,
+          "calc_progress2": 0,
+          "state": "in_progress",
+          "persisted": false,
+          "last_updated": 1758879480.99668,
+          "current_request": "calculation-2"
+        }
+      }
+    }
+  }
+}

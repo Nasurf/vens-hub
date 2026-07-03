@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  coursegen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: 888429341445.dkr.ecr.us-east-1.amazonaws.com/rag:latest
+    container_name: coursegen-app
+    
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - COURSEGEN_COURSES_JSON=/app/data/textbooks/courses.json
+      - COURSEGEN_CACHE_DIR=/app/OUTPUT_DATA2/cache
+      - CHROMA_PERSIST_DIR=/app/OUTPUT_DATA2/emdeddings
+      - OMP_NUM_THREADS=2
+      - WORKERS=2   # configurable worker count
+    env_file:
+      - .env
+    
+    # Volume mounts for data persistence
+    volumes:
+      - ./OUTPUT_DATA2:/app/OUTPUT_DATA2       # embeddings, cache, exports
+      - ./data:/app/data                       # data files
+    
+    # ✅ Real resource limits (works in plain Compose)
+    mem_limit: 8g
+    cpus: "2.0"
+    
+    # Health check - verify ChromaDB embeddings directory exists
+    healthcheck:
+      test: ["CMD", "test", "-d", "/app/OUTPUT_DATA2/emdeddings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Default command - run question generation
+    command: ["--theory-per-request", "10", "--calc-per-request", "5", "--request-delay", "2"]
+    
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # Optional: Add a service for question generation with specific configuration
+  coursegen-questions:
+    extends: coursegen
+    container_name: coursegen-questions
+    command: ["--generate-questions"]
+    profiles:
+      - questions
+    
+  # Optional: Add a service for outline generation
+  coursegen-outlines:
+    extends: coursegen
+    container_name: coursegen-outlines
+    command: ["--department_from", "EEE 315"]
+    profiles:
+      - outlines
+
+networks:
+  default:
+    name: coursegen-network
+    driver: bridge

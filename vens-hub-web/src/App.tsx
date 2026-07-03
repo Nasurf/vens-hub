@@ -3051,6 +3051,12 @@ function FlashcardCardUI({
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [rated, setRated] = useState(false)
+  const [swipeDir, setSwipeDir] = useState<'left' | 'right' | null>(null)
+
+  // Touch swipe state
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const SWIPE_THRESHOLD = 60
 
   const { latestAttempt: a, state, retention } = card
   const dueLabel = getDueLabel(state, now)
@@ -3084,8 +3090,48 @@ Explain the concept clearly and briefly, then point out the key reasoning step.`
     onRate(rating)
   }
 
+  // Touch swipe handlers
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+    setSwipeDir(null)
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    if (rated) return
+    const dx = e.touches[0].clientX - touchStartX.current
+    const dy = e.touches[0].clientY - touchStartY.current
+    // Only trigger for horizontal swipes (dx > dy)
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 20) {
+      setSwipeDir(dx > 0 ? 'right' : 'left')
+    } else {
+      setSwipeDir(null)
+    }
+  }
+
+  function onTouchEnd() {
+    if (rated || !swipeDir) return
+    if (swipeDir === 'right') {
+      handleRate('good')
+    } else {
+      handleRate('again')
+    }
+    setSwipeDir(null)
+  }
+
   return (
-    <article className="flashcard-card" data-card-index={index}>
+    <article
+      className={cx('flashcard-card', swipeDir && `swiping-${swipeDir}`)}
+      data-card-index={index}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      {index === 0 && !rated && (
+        <div className="flashcard-swipe-hint">
+          Swipe right = Good · Swipe left = Again
+        </div>
+      )}
       <div className="flashcard-card-header">
         <div className="flashcard-meta">
           <span className="flashcard-course">{a.courseCode}</span>
@@ -3160,10 +3206,10 @@ Explain the concept clearly and briefly, then point out the key reasoning step.`
       <button
         className="ghost-button full flashcard-ai-btn"
         onClick={handleAskAI}
-        disabled={aiLoading || !!aiExplanation}
+        disabled={aiLoading}
       >
         <Sparkles size={16} />
-        {aiLoading ? 'Getting AI explanation...' : aiExplanation ? 'AI explanation below' : 'Ask AI to explain'}
+        {aiLoading ? 'Getting AI explanation...' : aiExplanation ? 'Ask AI again' : 'Ask AI to explain'}
       </button>
 
       {aiExplanation && (

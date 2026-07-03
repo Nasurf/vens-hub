@@ -1,0 +1,852 @@
+[
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "What fundamental characteristic defines the airworthiness of an aerospace structure?",
+    "options": [
+      "Its ability to operate safely in flight.",
+      "Its aesthetic appeal and passenger comfort.",
+      "Its maximum speed and altitude capabilities.",
+      "Its manufacturing cost and market value."
+    ],
+    "correct_answer": "A",
+    "correct_answer_text": "Its ability to operate safely in flight.",
+    "explanation": "Airworthiness is fundamentally defined by an aircraft's capacity to operate safely during flight, ensuring it is fit for safe operation and maintained accordingly through compliance with design, manufacturing, and maintenance standards.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 1,
+      "generated_at": 1758879332.9508276
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "How is the airworthiness of an aircraft best characterized in terms of its duration?",
+    "options": [
+      "A continuous process throughout its service life.",
+      "A one-time certification event at manufacturing.",
+      "An annual assessment performed by the manufacturer.",
+      "A condition solely determined by pre-flight checks."
+    ],
+    "correct_answer": "A",
+    "correct_answer_text": "A continuous process throughout its service life.",
+    "explanation": "Airworthiness is not a singular event but rather a continuous process involving initial certification, ongoing maintenance, and periodic inspections to ensure safe operating conditions throughout the aircraft's service life.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 2,
+      "generated_at": 1758879332.9508498
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "What is the primary objective of conducting an inspection on an aircraft or its components?",
+    "options": [
+      "To enhance the aircraft's resale value.",
+      "To identify defects or discrepancies affecting airworthiness.",
+      "To upgrade the aircraft's entertainment systems.",
+      "To reduce fuel consumption during operation."
+    ],
+    "correct_answer": "B",
+    "correct_answer_text": "To identify defects or discrepancies affecting airworthiness.",
+    "explanation": "The main purpose of an inspection is to ascertain the aircraft's condition and pinpoint any flaws or inconsistencies that could compromise its airworthiness and safe operation.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 3,
+      "generated_at": 1758879332.9508607
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "Which personnel are typically qualified to perform detailed aircraft inspections, such as annual inspections?",
+    "options": [
+      "Flight attendants.",
+      "Air traffic controllers.",
+      "Licensed Aircraft Maintenance Engineers (LAMEs).",
+      "Aircraft designers."
+    ],
+    "correct_answer": "C",
+    "correct_answer_text": "Licensed Aircraft Maintenance Engineers (LAMEs).",
+    "explanation": "Detailed inspections, like annual inspections, are typically performed by qualified personnel such as Licensed Aircraft Maintenance Engineers (LAMEs) or authorized inspectors, who possess the necessary expertise.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 4,
+      "generated_at": 1758879332.9508703
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "Which of the following factors primarily dictates the scope and frequency of aircraft inspections?",
+    "options": [
+      "The aircraft's paint scheme and interior design.",
+      "Regulatory requirements, manufacturer's recommendations, and operating environment.",
+      "The pilot's personal preference and flight schedule.",
+      "The availability of spare parts in the market."
+    ],
+    "correct_answer": "B",
+    "correct_answer_text": "Regulatory requirements, manufacturer's recommendations, and operating environment.",
+    "explanation": "The scope and frequency of aircraft inspections are determined by a combination of regulatory mandates, the aircraft manufacturer's guidelines, and the specific operational conditions and environment of the aircraft.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 5,
+      "generated_at": 1758879332.9508815
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "A quick visual check performed by the pilot before each flight to ensure immediate operational safety is known as what type of inspection?",
+    "options": [
+      "An annual inspection.",
+      "A 100-hour inspection.",
+      "A pre-flight inspection.",
+      "A progressive inspection."
+    ],
+    "correct_answer": "C",
+    "correct_answer_text": "A pre-flight inspection.",
+    "explanation": "A pre-flight inspection is specifically described as a rapid visual check conducted by the pilot prior to each flight, distinct from more comprehensive or scheduled maintenance inspections.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 6,
+      "generated_at": 1758879332.9508915
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "Beyond visual examinations and functional checks, what advanced methods are often employed during inspections to detect hidden defects in aerospace structures?",
+    "options": [
+      "Destructive material testing.",
+      "Non-destructive testing (NDT) techniques.",
+      "Aerodynamic performance simulations.",
+      "Passenger feedback surveys."
+    ],
+    "correct_answer": "B",
+    "correct_answer_text": "Non-destructive testing (NDT) techniques.",
+    "explanation": "Non-destructive testing (NDT) methods, such as eddy current, ultrasonic, and radiographic inspections, are utilized to identify hidden defects without causing damage to the aircraft structure or components.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 7,
+      "generated_at": 1758879332.950902
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "What is the primary role of maintenance records in the context of aircraft airworthiness management?",
+    "options": [
+      "To serve as a marketing tool for the aircraft.",
+      "To provide a complete history of maintenance, repairs, and modifications.",
+      "To dictate the aircraft's flight routes.",
+      "To calculate the aircraft's fuel efficiency."
+    ],
+    "correct_answer": "B",
+    "correct_answer_text": "To provide a complete history of maintenance, repairs, and modifications.",
+    "explanation": "Maintenance records are crucial for airworthiness management as they compile a comprehensive history of all maintenance, repairs, and modifications, which is essential for tracking the aircraft's airworthiness status.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 8,
+      "generated_at": 1758879332.9509115
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "According to airworthiness standards, what key characteristics must maintenance records possess?",
+    "options": [
+      "They must be decorative, confidential, and stored off-site.",
+      "They must be accurate, complete, up-to-date, and retained for the life of the aircraft.",
+      "They must be brief, summarized, and updated only annually.",
+      "They must be written in a specific proprietary software format."
+    ],
+    "correct_answer": "B",
+    "correct_answer_text": "They must be accurate, complete, up-to-date, and retained for the life of the aircraft.",
+    "explanation": "Maintenance records are required to be accurate, complete, and current, and must be preserved for the entire service life of the aircraft or its components to ensure proper airworthiness tracking.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 9,
+      "generated_at": 1758879332.9509199
+    }
+  },
+  {
+    "course_code": "AAE 331",
+    "course_name": "MECHANICS OF AEROSPACE STRUCTUES",
+    "topic_name": "Airworthiness Fundamentals",
+    "subtopic_name": "Inspection Procedures",
+    "level": "300",
+    "semester": "FIRST",
+    "question_type": "theory",
+    "difficulty_ranking": 4,
+    "difficulty": "Medium",
+    "question": "Who bears the ultimate primary responsibility for ensuring the airworthiness of an aircraft?",
+    "options": [
+      "The aircraft manufacturer.",
+      "The air traffic control agency.",
+      "The aircraft owner or operator.",
+      "The fuel supplier."
+    ],
+    "correct_answer": "C",
+    "correct_answer_text": "The aircraft owner or operator.",
+    "explanation": "While many entities contribute, the primary responsibility for an aircraft's airworthiness ultimately rests with the aircraft owner or operator, who must ensure it is maintained in a safe condition.",
+    "solution_steps": [],
+    "rag_sources": [
+      {
+        "ref_id": "ref-1",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 36,
+        "score": 0.8233440816402435,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-2",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 25,
+        "score": 0.815922886133194,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-3",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 27,
+        "score": 0.8110944032669067,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-4",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 0,
+        "score": 0.8083676397800446,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-5",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 38,
+        "score": 0.7951860725879669,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-6",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 22,
+        "score": 0.7922623753547668,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-7",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 4,
+        "score": 0.791975349187851,
+        "snippet": ""
+      },
+      {
+        "ref_id": "ref-8",
+        "path": "/home/raregazetto/Documents/SCHOOL/COMPILATION/AAE/300/1/AAE 331/AAE331-Air Worthiness note.pdf",
+        "chunk_index": 10,
+        "score": 0.7904829978942871,
+        "snippet": ""
+      }
+    ],
+    "extra_metadata": {
+      "request_name": "theory-1",
+      "question_index": 10,
+      "generated_at": 1758879332.9509292
+    }
+  }
+]
