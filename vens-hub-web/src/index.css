@@ -402,6 +402,12 @@ label {
   }
 }
 
+.primary-button:focus-visible,
+.ghost-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .ghost-button {
   background: var(--card);
   border: 1px solid var(--line);
@@ -1228,7 +1234,6 @@ label {
 
 .hero-dashboard img {
   max-height: 170px;
-  opacity: 0.9;
   width: 200px;
 }
 
@@ -1247,9 +1252,7 @@ label {
 .streak-cta-card,
 .streak-calendar-card,
 .streak-hero-card {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--card);
   border: 1px solid rgba(15, 155, 142, 0.14);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -1261,7 +1264,7 @@ label {
 [data-theme="dark"] .streak-cta-card,
 [data-theme="dark"] .streak-calendar-card,
 [data-theme="dark"] .streak-hero-card {
-  background: rgba(17, 17, 17, 0.86);
+  background: var(--card);
   border-color: rgba(15, 155, 142, 0.2);
 }
 
@@ -1294,6 +1297,22 @@ label {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
+@keyframes course-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.course-journey-grid > .course-journey-card {
+  animation: course-fade-in 280ms var(--ease-out) both;
+}
+
+.course-journey-grid > .course-journey-card:nth-child(1) { animation-delay: 0ms; }
+.course-journey-grid > .course-journey-card:nth-child(2) { animation-delay: 35ms; }
+.course-journey-grid > .course-journey-card:nth-child(3) { animation-delay: 70ms; }
+.course-journey-grid > .course-journey-card:nth-child(4) { animation-delay: 105ms; }
+.course-journey-grid > .course-journey-card:nth-child(5) { animation-delay: 140ms; }
+.course-journey-grid > .course-journey-card:nth-child(6) { animation-delay: 175ms; }
+
 .course-journey-card {
   align-items: center;
   display: grid;
@@ -1310,6 +1329,15 @@ label {
     box-shadow: var(--shadow);
     transform: translateY(-2px);
   }
+}
+
+.course-journey-card:active {
+  transform: scale(0.98);
+}
+
+.course-journey-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .course-journey-icon,
@@ -1408,8 +1436,22 @@ label {
   display: grid;
   gap: 0.4rem;
   padding: 1.15rem 1.25rem;
-  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  transition: transform 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
 }
+
+@keyframes metric-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.metrics-grid > .metric-card {
+  animation: metric-fade-in 250ms var(--ease-out) both;
+}
+
+.metrics-grid > .metric-card:nth-child(1) { animation-delay: 0ms; }
+.metrics-grid > .metric-card:nth-child(2) { animation-delay: 40ms; }
+.metrics-grid > .metric-card:nth-child(3) { animation-delay: 80ms; }
+.metrics-grid > .metric-card:nth-child(4) { animation-delay: 120ms; }
 
 @media (hover: hover) and (pointer: fine) {
   .metric-card:hover {
@@ -1420,6 +1462,11 @@ label {
 
 .metric-card:active {
   transform: scale(0.98);
+}
+
+.metric-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .metric-icon {

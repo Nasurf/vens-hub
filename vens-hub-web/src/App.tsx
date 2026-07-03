@@ -232,7 +232,8 @@ function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
     return raw ? (JSON.parse(raw) as T) : fallback
-  } catch {
+  } catch (e) {
+    console.warn(`[vens-hub] Failed to parse localStorage key "${key}":`, e)
     return fallback
   }
 }
@@ -696,9 +697,7 @@ function todayIso() {
 }
 
 function dayKey(date: Date) {
-  const copy = new Date(date)
-  copy.setHours(0, 0, 0, 0)
-  return dateToIso(copy)
+  return dateToIso(date)
 }
 
 function getStreakStats(attempts: QuizAttempt[]) {
@@ -710,7 +709,7 @@ function getStreakStats(attempts: QuizAttempt[]) {
   if (!completedToday) cursor.setDate(cursor.getDate() - 1)
 
   let currentStreak = 0
-  while (completedDays.has(dayKey(cursor))) {
+  while (completedDays.has(dayKey(cursor)) && currentStreak < STREAK_WINDOW_DAYS) {
     currentStreak += 1
     cursor.setDate(cursor.getDate() - 1)
   }
@@ -827,11 +826,11 @@ function MetricCard({
   )
 
   if (to) {
-    return <Link className="metric-card" to={to}>{content}</Link>
+    return <Link className="metric-card" to={to} aria-label={`${label}: ${value}`}>{content}</Link>
   }
 
   return (
-    <article className="metric-card">
+    <article className="metric-card" aria-label={`${label}: ${value}`}>
       {content}
     </article>
   )
@@ -872,7 +871,7 @@ function courseSummaryTags(course: Partial<Course>) {
   return tags.slice(0, 3)
 }
 
-function CourseJourneyCard({ course, to }: { course: Pick<Course, 'code' | 'title'> & Partial<Course>; to: string }) {
+function CourseJourneyCard({ course, to }: { course: Pick<Course, 'code' | 'title'> & Partial<Pick<Course, 'units' | 'question_count'>>; to: string }) {
   const tags = courseSummaryTags(course)
   return (
     <Link className="course-journey-card" to={to}>
@@ -1690,11 +1689,19 @@ function AIAssistantPanel({ open, onClose, context, systemPrompt }: { open: bool
   )
 }
 
+const EMPTY_COURSES: Array<{ code: string; title: string }> = []
+
 function DashboardPage() {
   const profile = useProfile()
-  const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
-  const selectedCourses = profile?.selectedCourses ?? []
-  const streakStats = getStreakStats(attempts)
+  const [attempts, setAttempts] = useState<QuizAttempt[]>(() => readJson<QuizAttempt[]>(ATTEMPTS_KEY, []))
+  const selectedCourses = profile?.selectedCourses ?? EMPTY_COURSES
+  const streakStats = useMemo(() => getStreakStats(attempts), [attempts])
+
+  useEffect(() => {
+    const sync = () => setAttempts(readJson<QuizAttempt[]>(ATTEMPTS_KEY, []))
+    window.addEventListener('vens-hub-storage', sync)
+    return () => window.removeEventListener('vens-hub-storage', sync)
+  }, [])
 
   if (!profile) return <LoadingState />
 
@@ -1715,10 +1722,11 @@ function DashboardPage() {
       {/* Hero dashboard card — desktop only */}
       <section className="hero-dashboard">
         <div>
-          <p className="eyebrow">{profile.departmentName}</p>
           <h2>Your learning workspace</h2>
           <p>
-            Track your selected courses, take quizzes, and monitor your progress all in one place.
+            {selectedCourses.length > 0
+              ? `You're studying ${selectedCourses.length} course${selectedCourses.length > 1 ? 's' : ''}. Keep it up.`
+              : 'Start by picking courses from the catalog.'}
           </p>
         </div>
         <BrandMark className="hub-hero-mark" label="Engineering Hub" />
@@ -1739,7 +1747,7 @@ function DashboardPage() {
         <div>
           <p className="eyebrow">Daily streak</p>
           <h2>{streakStats.currentStreak} day{streakStats.currentStreak === 1 ? '' : 's'} strong</h2>
-          <p>{streakStats.completedToday ? 'You have already protected today’s streak.' : 'Jump into a quick quiz to keep your streak alive.'}</p>
+          <p>{streakStats.completedToday ? "You have already protected today's streak." : "Jump into a quick quiz to keep your streak alive."}</p>
         </div>
         <Link className="primary-button" to="/app/streaks">
           Open streaks <ChevronRight size={18} />
@@ -1763,6 +1771,11 @@ function DashboardPage() {
               <CourseJourneyCard course={course} key={course.code} to={`/app/courses/${encodeURIComponent(course.code)}`} />
             ))}
           </div>
+        )}
+        {selectedCourses.length === 0 && (
+          <Link className="primary-button" to="/app/courses" style={{ marginTop: '1rem', alignSelf: 'flex-start' }}>
+            Browse courses <ChevronRight size={18} />
+          </Link>
         )}
       </section>
     </div>
