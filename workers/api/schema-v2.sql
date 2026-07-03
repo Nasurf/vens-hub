@@ -84,6 +84,54 @@ CREATE TABLE IF NOT EXISTS user_mastery (
 
 CREATE INDEX IF NOT EXISTS idx_mastery_user ON user_mastery(user_id);
 
+CREATE TABLE IF NOT EXISTS user_flashcard_attempts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  question_key TEXT NOT NULL,
+  question_id TEXT DEFAULT '',
+  course_code TEXT NOT NULL,
+  course_title TEXT DEFAULT '',
+  topic_name TEXT DEFAULT '',
+  mode TEXT NOT NULL,
+  question_text TEXT NOT NULL,
+  options TEXT DEFAULT '[]',
+  selected_answer_text TEXT DEFAULT '',
+  selected_answer_index INTEGER,
+  correct_answer_text TEXT DEFAULT '',
+  correct_answer_index INTEGER,
+  is_correct INTEGER NOT NULL,
+  score REAL,
+  explanation TEXT DEFAULT '',
+  solution_steps TEXT DEFAULT '[]',
+  rag_sources TEXT DEFAULT '',
+  answered_at TEXT NOT NULL,
+  synced_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_flashcard_attempts_user_answered ON user_flashcard_attempts(user_id, answered_at);
+CREATE INDEX IF NOT EXISTS idx_flashcard_attempts_user_question ON user_flashcard_attempts(user_id, question_key);
+
+CREATE TABLE IF NOT EXISTS user_flashcard_states (
+  user_id TEXT NOT NULL,
+  question_key TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_answered_at TEXT NOT NULL,
+  last_reviewed_at TEXT DEFAULT '',
+  next_review_at TEXT NOT NULL,
+  stability_days REAL DEFAULT 1,
+  ease_factor REAL DEFAULT 2.3,
+  repetitions INTEGER DEFAULT 0,
+  lapses INTEGER DEFAULT 0,
+  last_result TEXT DEFAULT 'incorrect',
+  last_quality TEXT DEFAULT '',
+  synced_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, question_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_flashcard_states_user_due ON user_flashcard_states(user_id, next_review_at);
+
 CREATE TABLE IF NOT EXISTS user_profiles (
   user_id TEXT PRIMARY KEY,
   first_name TEXT NOT NULL,

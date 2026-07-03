@@ -276,6 +276,56 @@ Response:
 }
 ```
 
+### Flashcards sync
+```
+GET  /user/flashcards
+POST /user/flashcards/sync
+Header: X-User-Id: <firebase-uid>
+```
+
+The web app keeps flashcards in localStorage first for instant quiz/review feedback, then sends a delayed background sync to D1. The sync endpoint upserts full question snapshots plus the spaced-review state so the deck can be restored on another browser or device.
+
+`POST /user/flashcards/sync` request body:
+```json
+{
+  "attempts": [
+    {
+      "id": "<uuid>",
+      "questionKey": "AAE 101:multiple-choice:162512",
+      "questionId": "162512",
+      "courseCode": "AAE 101",
+      "courseTitle": "INTRODUCTION TO AEROSPACE ENGINEERING",
+      "topicName": "Aerodynamics",
+      "mode": "multiple-choice",
+      "questionText": "...",
+      "options": ["A", "B", "C", "D"],
+      "selectedAnswerText": "A",
+      "correctAnswerText": "B",
+      "isCorrect": false,
+      "solutionSteps": [],
+      "answeredAt": "2026-07-03T00:00:00.000Z"
+    }
+  ],
+  "states": [
+    {
+      "questionKey": "AAE 101:multiple-choice:162512",
+      "firstSeenAt": "2026-07-03T00:00:00.000Z",
+      "lastAnsweredAt": "2026-07-03T00:00:00.000Z",
+      "nextReviewAt": "2026-07-03T00:10:00.000Z",
+      "stabilityDays": 0.25,
+      "easeFactor": 2.1,
+      "repetitions": 0,
+      "lapses": 1,
+      "lastResult": "incorrect"
+    }
+  ]
+}
+```
+
+Response: `{ "status": "synced", "attempts": 1, "states": 1, "syncedAt": "..." }`
+
+`GET /user/flashcards` returns `{ "attempts": [...], "states": [...] }` for local cache hydration.
+
 ### Seed mastery from client cache
 ```
 POST /user/seed-mastery

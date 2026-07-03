@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleUserRound,
   ClipboardList,
   Eye,
@@ -43,6 +44,7 @@ import {
   PlayCircle,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
   Sparkles,
@@ -53,6 +55,7 @@ import {
   Trophy,
   MapPin,
   UploadCloud,
+  MoreVertical,
   Users,
   User,
   X,
@@ -85,10 +88,34 @@ import {
   getUserMastery,
   getUserMasteryForCourse,
   getUserAttempts,
+  getUserFlashcards,
+  syncUserFlashcards,
   type AttemptRecord,
   type CourseStats,
   type MasteryRecord,
 } from './adaptive'
+import {
+  buildFlashcardAttempt,
+  recordFlashcardAttempt,
+  readFlashcardAttempts,
+  readFlashcardStates,
+  readFlashcardSyncMeta,
+  writeFlashcardAttempts,
+  writeFlashcardStates,
+  mergeFlashcardAttempts,
+  mergeFlashcardStates,
+  markFlashcardsDirty,
+  markFlashcardsSynced,
+  markFlashcardsSyncFailed,
+  buildReviewDeck,
+  getDeckStats,
+  getDueLabel,
+  getStrengthLabel,
+  updateFlashcardReview,
+  type FlashcardCard,
+  type FlashcardSyncMeta,
+  type ReviewRating,
+} from './flashcards'
 
 type Department = {
   name: string
@@ -152,18 +179,7 @@ type EventItem = {
   reminder?: string
 }
 
-type StudyUpload = {
-  id: string
-  name: string
-  size: number
-  subject: string
-  createdAt: string
-  contentType?: string
-  objectKey?: string
-  status?: 'uploaded' | 'pending_upload' | 'failed'
-  url?: string
-  error?: string
-}
+
 
 type QuizAttempt = {
   id: string
@@ -190,7 +206,7 @@ type AsyncState<T> = {
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL
-const UPLOAD_API_BASE = import.meta.env.VITE_UPLOAD_API_BASE_URL
+
 const ASSISTANT_API_BASE = import.meta.env.VITE_ASSISTANT_API_BASE_URL
 
 if (!API_BASE) {
@@ -199,7 +215,7 @@ if (!API_BASE) {
 
 const PROFILE_KEY = 'vens-hub-web-profile'
 const EVENTS_KEY = 'vens-hub-web-events'
-const UPLOADS_KEY = 'vens-hub-web-uploads'
+
 const ATTEMPTS_KEY = 'vens-hub-web-quiz-attempts'
 const STREAK_WINDOW_DAYS = 28
 const THEME_KEY = 'vens-hub-web-theme'
@@ -541,99 +557,7 @@ function makeGapPrompt(question: Question) {
 }
 
 
-function safePathPart(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'user'
-}
 
-function safeFilename(value: string) {
-  return value.trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_') || 'document'
-}
-
-function makeObjectKey(file: File, profile: Profile | null) {
-  const owner = safePathPart(profile?.email ?? profile?.firstName ?? 'demo-user')
-  return `users/${owner}/uploads/${Date.now()}-${crypto.randomUUID()}-${safeFilename(file.name)}`
-}
-
-async function uploadStudyFile(file: File, profile: Profile | null): Promise<StudyUpload> {
-  const objectKey = makeObjectKey(file, profile)
-  const metadata = {
-    uploaded_by: profile?.email ?? 'demo-user',
-    original_filename: file.name,
-    subject: 'General',
-  }
-
-  try {
-    const presign = await postJson<{
-      upload?: { url: string; method?: string; headers?: Record<string, string> }
-      object_key?: string
-      public_url?: string
-      finalize_url?: string
-    }>(UPLOAD_API_BASE, '/uploads/presign', {
-      object_key: objectKey,
-      filename: file.name,
-      content_type: file.type || 'application/octet-stream',
-      size_bytes: file.size,
-      metadata,
-    })
-
-    if (!presign.upload?.url) {
-      throw new Error('Upload endpoint did not return an upload URL.')
-    }
-
-    const put = await fetch(presign.upload.url, {
-      method: presign.upload.method ?? 'PUT',
-      headers: {
-        ...(presign.upload.headers ?? {}),
-        'Content-Type': file.type || 'application/octet-stream',
-        'x-vens-upload-size': String(file.size),
-      },
-      body: file,
-    })
-
-    if (!put.ok) {
-      throw new Error(`R2 upload PUT failed with status ${put.status}`)
-    }
-
-    const finalObjectKey = presign.object_key ?? objectKey
-    const finalize = await postJson<{ record?: { url?: string }; public_url?: string }>(
-      UPLOAD_API_BASE,
-      presign.finalize_url ?? '/uploads/finalize',
-      {
-        object_key: finalObjectKey,
-        size_bytes: file.size,
-        metadata,
-      },
-    )
-
-    return {
-      id: crypto.randomUUID(),
-      name: file.name,
-      size: file.size,
-      subject: 'General',
-      contentType: file.type || 'application/octet-stream',
-      objectKey: finalObjectKey,
-      url: finalize.record?.url ?? finalize.public_url ?? presign.public_url,
-      status: 'uploaded',
-      createdAt: new Date().toISOString(),
-    }
-  } catch (error) {
-    return {
-      id: crypto.randomUUID(),
-      name: file.name,
-      size: file.size,
-      subject: 'General',
-      contentType: file.type || 'application/octet-stream',
-      objectKey,
-      status: 'pending_upload',
-      error: error instanceof Error ? error.message : String(error),
-      createdAt: new Date().toISOString(),
-    }
-  }
-}
 
 async function askAssistant(messages: AssistantMessage[], context?: string, systemPrompt?: string) {
   const baseUrl = ASSISTANT_API_BASE || API_BASE
@@ -681,11 +605,7 @@ function useAsync<T>(key: string, loader: () => Promise<T>) {
   return state
 }
 
-function formatBytes(size: number) {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
+
 
 function dateToIso(date: Date) {
   const year = date.getFullYear()
@@ -926,7 +846,7 @@ function MobileLanding() {
   const [msgIdx, setMsgIdx] = useState(0)
   const messages = [
     "AI-powered quizzes that adapt to you.",
-    "Upload textbooks & study at your pace.",
+    "Flashcard review with spaced repetition.",
     "Track your streaks & daily progress.",
     "Master engineering concepts daily.",
   ]
@@ -982,7 +902,7 @@ function LandingPage() {
               Engineer <span>smarter</span> on the web.
             </h1>
             <p>
-              Courses, practice quizzes, schedules, study uploads and progress analytics in one
+              Courses, practice quizzes, schedules, flashcard review and progress analytics in one
               focused learning workspace.
             </p>
           </div>
@@ -1575,15 +1495,125 @@ function RequireAuth() {
   return <Outlet />
 }
 
+const FLASHCARD_DB_SYNC_DELAY_MS = 30_000
+
+function useFlashcardDatabaseSync(userId: string | null) {
+  const [meta, setMeta] = useState<FlashcardSyncMeta>(() => readFlashcardSyncMeta())
+  const [isSyncing, setIsSyncing] = useState(false)
+  const hydratedUserRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const syncMeta = () => setMeta(readFlashcardSyncMeta())
+    window.addEventListener('storage', syncMeta)
+    window.addEventListener('vens-hub-storage', syncMeta)
+    return () => {
+      window.removeEventListener('storage', syncMeta)
+      window.removeEventListener('vens-hub-storage', syncMeta)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!userId || hydratedUserRef.current === userId) return
+    hydratedUserRef.current = userId
+    let active = true
+
+    getUserFlashcards(userId)
+      .then((remote) => {
+        if (!active) return
+        const remoteAttempts = remote.attempts ?? []
+        const remoteStates = remote.states ?? []
+        const localAttempts = readFlashcardAttempts()
+        const localStates = readFlashcardStates()
+
+        if (remoteAttempts.length > 0 || remoteStates.length > 0) {
+          writeFlashcardAttempts(mergeFlashcardAttempts(localAttempts, remoteAttempts), { markDirty: false })
+          writeFlashcardStates(mergeFlashcardStates(localStates, remoteStates), { markDirty: false })
+        }
+
+        const remoteAttemptIds = new Set(remoteAttempts.map((attempt) => attempt.id))
+        const remoteStateKeys = new Set(remoteStates.map((state) => state.questionKey))
+        const hasLocalOnlyData =
+          localAttempts.some((attempt) => !remoteAttemptIds.has(attempt.id)) ||
+          localStates.some((state) => !remoteStateKeys.has(state.questionKey))
+
+        if (hasLocalOnlyData && !readFlashcardSyncMeta().lastSyncedAt) {
+          markFlashcardsDirty()
+        } else if ((remoteAttempts.length > 0 || remoteStates.length > 0) && !hasLocalOnlyData) {
+          markFlashcardsSynced({ attemptCount: remoteAttempts.length, stateCount: remoteStates.length })
+        }
+        setMeta(readFlashcardSyncMeta())
+      })
+      .catch(() => {
+        if (active) setMeta(readFlashcardSyncMeta())
+      })
+
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId || isSyncing || !navigator.onLine) return
+    const attempts = readFlashcardAttempts()
+    const states = readFlashcardStates()
+    const hasLocalFlashcards = attempts.length > 0 || states.length > 0
+    const needsInitialSync = hasLocalFlashcards && !meta.lastSyncedAt
+    const needsSync = meta.dirty || needsInitialSync
+    if (!hasLocalFlashcards || !needsSync) return
+
+    const timer = window.setTimeout(() => {
+      const latestMeta = readFlashcardSyncMeta()
+      const latestAttempts = readFlashcardAttempts()
+      const latestStates = readFlashcardStates()
+      if (latestAttempts.length === 0 && latestStates.length === 0) return
+
+      const syncDirtyAt = latestMeta.lastDirtyAt
+      setIsSyncing(true)
+      syncUserFlashcards(userId, {
+        attempts: latestAttempts,
+        states: latestStates,
+        clientLastSyncedAt: latestMeta.lastSyncedAt,
+      })
+        .then((result) => {
+          const currentMeta = readFlashcardSyncMeta()
+          if (currentMeta.lastDirtyAt && currentMeta.lastDirtyAt !== syncDirtyAt) {
+            markFlashcardsDirty(currentMeta.lastDirtyAt)
+            return
+          }
+          markFlashcardsSynced({
+            attemptCount: result.attempts,
+            stateCount: result.states,
+            syncedAt: result.syncedAt,
+          })
+        })
+        .catch((error) => {
+          markFlashcardsSyncFailed(error instanceof Error ? error.message : 'Flashcard database sync failed')
+        })
+        .finally(() => {
+          setIsSyncing(false)
+          setMeta(readFlashcardSyncMeta())
+        })
+    }, FLASHCARD_DB_SYNC_DELAY_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [userId, meta.dirty, meta.pendingSince, meta.lastSyncedAt, isSyncing])
+
+  return { meta, isSyncing }
+}
+
 function AppShell() {
   const profile = useProfile()
+  const firebaseUser = useFirebaseUser()
+  const userId = firebaseUser && firebaseUser !== 'loading' ? firebaseUser.uid : null
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  useFlashcardDatabaseSync(userId)
   const navItems = [
     { to: '/app', label: 'Home', icon: <Home size={22} />, end: true },
     { to: '/app/schedule', label: 'Schedule', icon: <CalendarDays size={22} /> },
     { to: '/app/hub', label: 'Hub', icon: <Layers3 size={22} /> },
-    { to: '/app/study', label: 'Study', icon: <BookOpen size={22} /> },
+    { to: '/app/study', label: 'Flashcards', icon: <BookOpen size={22} /> },
     { to: '/app/courses', label: 'Courses', icon: <GraduationCap size={22} /> },
     { to: '/app/streaks', label: 'Streaks', icon: <Flame size={22} /> },
   ]
@@ -2281,6 +2311,29 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
     }]
     setAnswers(next)
     setShowResult(true)
+    // Record flashcard attempt
+    const opts = questionOptions(current)
+    const correctIdx = answerIndex(current)
+    const correctText = current.correct_answer_text || opts[correctIdx] || current.correct_answer || ''
+    const selectedText = opts[selected] || ''
+    const fc = buildFlashcardAttempt({
+      courseCode: code,
+      courseTitle,
+      topicName: current.topic_name || 'General',
+      mode: 'multiple-choice',
+      questionId: current.id,
+      questionText: current.question,
+      options: opts,
+      selectedAnswerText: selectedText,
+      selectedAnswerIndex: selected,
+      correctAnswerText: correctText,
+      correctAnswerIndex: correctIdx,
+      isCorrect: selected === correctIdx,
+      explanation: current.explanation,
+      solutionSteps: parseJsonList(current.solution_steps),
+      ragSources: current.rag_sources,
+    })
+    recordFlashcardAttempt(fc)
   }
 
   function nextQuestion() {
@@ -2524,6 +2577,25 @@ function TheoryQuizMode({ code, courseTitle, questions }: { code: string; course
     setFeedback(result)
     const next = [...results, result.isCorrect]
     setResults(next)
+    // Record flashcard attempt for theory
+    const correctText = result.expected || current.correct_answer_text || ''
+    const fcTheory = buildFlashcardAttempt({
+      courseCode: code,
+      courseTitle,
+      topicName: current.topic_name || 'General',
+      mode: 'theory',
+      questionId: current.id,
+      questionText: current.question,
+      options: [],
+      selectedAnswerText: answer,
+      correctAnswerText: correctText,
+      isCorrect: result.isCorrect,
+      score: result.score,
+      explanation: current.explanation,
+      solutionSteps: parseJsonList(current.solution_steps),
+      ragSources: current.rag_sources,
+    })
+    recordFlashcardAttempt(fcTheory)
     if (next.length === questions.length) {
       saveQuizAttempt({ courseCode: code, courseTitle, mode: 'theory', score: next.filter(Boolean).length, total: questions.length })
     }
@@ -2596,6 +2668,23 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
     setFeedback(isCorrect)
     const next = [...results, isCorrect]
     setResults(next)
+    // Record flashcard attempt for gap-fill
+    const fcGap = buildFlashcardAttempt({
+      courseCode: code,
+      courseTitle,
+      topicName: current.topic_name || 'General',
+      mode: 'gap-fill',
+      questionId: current.id,
+      questionText: current.question,
+      options: gap.choices,
+      selectedAnswerText: selected,
+      correctAnswerText: gap.correct,
+      isCorrect,
+      explanation: current.explanation,
+      solutionSteps: parseJsonList(current.solution_steps),
+      ragSources: current.rag_sources,
+    })
+    recordFlashcardAttempt(fcGap)
     if (next.length === questions.length) {
       saveQuizAttempt({ courseCode: code, courseTitle, mode: 'gap-fill', score: next.filter(Boolean).length, total: questions.length })
     }
@@ -2888,88 +2977,308 @@ function SchedulePage() {
   )
 }
 
-function StudyPage() {
-  const profile = useProfile()
-  const [uploads, setUploads] = useStoredList<StudyUpload>(UPLOADS_KEY, [])
-  const [query, setQuery] = useState('')
-  const [isUploading, setIsUploading] = useState(false)
-  const [statusMessage, setStatusMessage] = useState('')
-  const filtered = uploads.filter((item) => `${item.name} ${item.subject} ${item.status ?? ''}`.toLowerCase().includes(query.toLowerCase()))
+function FlashcardCardUI({
+  card,
+  index,
+  now,
+  onRate,
+}: {
+  card: FlashcardCard
+  index: number
+  now: string
+  onRate: (rating: ReviewRating) => void
+}) {
+  const [showExplanation, setShowExplanation] = useState(false)
+  const [aiExplanation, setAiExplanation] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
+  const [rated, setRated] = useState(false)
 
-  async function onFileChange(fileList: FileList | null) {
-    if (!fileList?.length) return
-    setIsUploading(true)
-    setStatusMessage(`Uploading ${fileList.length} file(s) to your study library...`)
-    const uploaded: StudyUpload[] = []
-    for (const file of Array.from(fileList)) {
-      const result = await uploadStudyFile(file, profile)
-      uploaded.push(result)
+  const { latestAttempt: a, state, retention } = card
+  const dueLabel = getDueLabel(state, now)
+  const strengthLabel = getStrengthLabel(retention, state)
+  const retentionPct = Math.round(retention * 100)
+
+  async function handleAskAI() {
+    if (aiLoading || aiExplanation) return
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const prompt = `You are helping a Vens Hub student review a flashcard.
+Course: ${a.courseCode} - ${a.courseTitle}
+Topic: ${a.topicName}
+Question: ${a.questionText}
+Student answer: ${a.selectedAnswerText}
+Correct answer: ${a.correctAnswerText}
+The student originally got this ${a.isCorrect ? 'correct' : 'incorrect'}.
+Explain the concept clearly and briefly, then point out the key reasoning step.`
+      const answer = await askAssistant(prompt, `Flashcard review for ${a.courseCode}`)
+      setAiExplanation(answer)
+    } catch {
+      setAiError('Could not get AI explanation. Try again later.')
+    } finally {
+      setAiLoading(false)
     }
-    setUploads([...uploaded, ...uploads])
-    const uploadedCount = uploaded.filter((item) => item.status === 'uploaded').length
-    const pendingCount = uploaded.length - uploadedCount
-    setStatusMessage(
-      pendingCount
-        ? `${uploadedCount} uploaded, ${pendingCount} saved locally and waiting to finish syncing.`
-        : `${uploadedCount} file(s) uploaded successfully.`,
-    )
-    setIsUploading(false)
   }
 
-  function removeUpload(id: string) {
-    setUploads(uploads.filter((item) => item.id !== id))
+  function handleRate(rating: ReviewRating) {
+    setRated(true)
+    onRate(rating)
+  }
+
+  return (
+    <article className="flashcard-card" data-card-index={index}>
+      <div className="flashcard-card-header">
+        <div className="flashcard-meta">
+          <span className="flashcard-course">{a.courseCode}</span>
+          <span className="flashcard-topic">{a.topicName}</span>
+        </div>
+        <div className="flashcard-badges">
+          <span className={cx('flashcard-result-badge', a.isCorrect ? 'correct' : 'wrong')}>
+            {a.isCorrect ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+            {a.isCorrect ? 'Correct' : 'Incorrect'}
+          </span>
+          <span className={cx('flashcard-strength-badge', strengthLabel.toLowerCase())}>
+            {strengthLabel}
+          </span>
+        </div>
+      </div>
+
+      <div className="flashcard-question">
+        <h3><LatexText text={a.questionText} /></h3>
+      </div>
+
+      <div className="flashcard-answers">
+        <div className="flashcard-answer-row student">
+          <strong>Your answer:</strong>
+          <span><LatexText text={a.selectedAnswerText || '(no answer)'} /></span>
+        </div>
+        <div className="flashcard-answer-row correct">
+          <strong>Correct answer:</strong>
+          <span><LatexText text={a.correctAnswerText || '(unavailable)'} /></span>
+        </div>
+      </div>
+
+      <div className="flashcard-due-info">
+        <Clock3 size={14} />
+        <span>{dueLabel}</span>
+        <span className="flashcard-retention">Retention: {retentionPct}%</span>
+        <span className="flashcard-date">Answered {new Date(a.answeredAt).toLocaleDateString()}</span>
+      </div>
+
+      {/* Explanation toggle */}
+      {(a.explanation || a.solutionSteps.length > 0) && (
+        <button className="ghost-button full flashcard-explain-toggle" onClick={() => setShowExplanation(!showExplanation)}>
+          {showExplanation ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {showExplanation ? 'Hide explanation' : 'Show explanation'}
+        </button>
+      )}
+
+      {showExplanation && (
+        <div className="flashcard-explanation">
+          {a.explanation && (
+            <div className="explanation-text">
+              <strong>Explanation:</strong>
+              <p><LatexText text={a.explanation} /></p>
+            </div>
+          )}
+          {a.solutionSteps.length > 0 && (
+            <div className="explanation-steps">
+              <strong>Solution steps:</strong>
+              <ol>
+                {a.solutionSteps.map((step, i) => (
+                  <li key={i}><LatexText text={step} /></li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {!a.explanation && a.solutionSteps.length === 0 && (
+            <p className="explanation-fallback">No detailed explanation is available for this question.</p>
+          )}
+        </div>
+      )}
+
+      {/* AI explanation */}
+      <button
+        className="ghost-button full flashcard-ai-btn"
+        onClick={handleAskAI}
+        disabled={aiLoading || !!aiExplanation}
+      >
+        <Sparkles size={16} />
+        {aiLoading ? 'Getting AI explanation...' : aiExplanation ? 'AI explanation below' : 'Ask AI to explain'}
+      </button>
+
+      {aiExplanation && (
+        <div className="flashcard-ai-response">
+          <div className="flashcard-ai-header">
+            <Bot size={16} />
+            <strong>AI Explanation</strong>
+          </div>
+          <p>{aiExplanation}</p>
+        </div>
+      )}
+
+      {aiError && (
+        <div className="flashcard-ai-response error">
+          <AlertCircle size={14} />
+          <p>{aiError}</p>
+        </div>
+      )}
+
+      {/* Review rating buttons */}
+      <div className="flashcard-rating-actions">
+        {rated ? (
+          <div className="flashcard-rated-msg">
+            <CheckCircle2 size={16} />
+            <span>Reviewed! Scroll for next card.</span>
+          </div>
+        ) : (
+          <>
+            <span className="flashcard-rate-label">How well did you remember?</span>
+            <div className="flashcard-rate-buttons">
+              <button className="rate-btn again" onClick={() => handleRate('again')}>
+                <RotateCcw size={14} />
+                Again
+              </button>
+              <button className="rate-btn hard" onClick={() => handleRate('hard')}>
+                Hard
+              </button>
+              <button className="rate-btn good" onClick={() => handleRate('good')}>
+                Good
+              </button>
+              <button className="rate-btn easy" onClick={() => handleRate('easy')}>
+                <Sparkles size={14} />
+                Easy
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function FlashcardsPage() {
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [syncMeta, setSyncMeta] = useState<FlashcardSyncMeta>(() => readFlashcardSyncMeta())
+  const feedRef = useRef<HTMLDivElement | null>(null)
+
+  // Reactive sync on localStorage changes
+  useEffect(() => {
+    const sync = () => {
+      setRefreshKey((k) => k + 1)
+      setSyncMeta(readFlashcardSyncMeta())
+    }
+    window.addEventListener('storage', sync)
+    window.addEventListener('vens-hub-storage', sync)
+    return () => {
+      window.removeEventListener('storage', sync)
+      window.removeEventListener('vens-hub-storage', sync)
+    }
+  }, [])
+
+  const now = new Date().toISOString()
+  const attempts = readFlashcardAttempts()
+  const states = readFlashcardStates()
+  const deck = buildReviewDeck(attempts, states, now)
+  const stats = getDeckStats(deck)
+  void refreshKey // used only to trigger re-render
+  const syncStatusText = syncMeta.lastError
+    ? 'Database sync failed. We will retry in the background.'
+    : syncMeta.dirty
+      ? 'Saved locally. Database sync is queued after a short delay.'
+      : syncMeta.lastSyncedAt
+        ? `Synced to database ${new Date(syncMeta.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        : 'Saved locally. Database sync starts after your first review.'
+
+  function handleRate(card: FlashcardCard, rating: ReviewRating) {
+    updateFlashcardReview(card.state.questionKey, rating)
+    setRefreshKey((k) => k + 1)
+  }
+
+  // Scroll snap observer
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const idx = Number((entry.target as HTMLElement).dataset.cardIndex)
+            if (!isNaN(idx)) setCurrentIndex(idx)
+          }
+        }
+      },
+      { root: feed, threshold: 0.6 },
+    )
+    const cards = feed.querySelectorAll('.flashcard-card')
+    cards.forEach((c) => observer.observe(c))
+    return () => observer.disconnect()
+  }, [deck.length])
+
+  if (deck.length === 0) {
+    return (
+      <div className="page-stack">
+        <PageHeader eyebrow="Review" title="Flashcards" />
+        <EmptyState
+          icon={<BrainCircuit />}
+          title="No flashcards yet"
+          body="Flashcards appear after you take quizzes. Each question you answer is saved for spaced review."
+        />
+        <Link className="primary-button" to="/app/courses">Browse courses & start a quiz</Link>
+      </div>
+    )
   }
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Materials" title="Study Materials" />
-      <section className="study-grid">
-        <div className="section-card upload-drop">
-          <UploadCloud size={42} />
-          <h2>Study uploads</h2>
-          <p>
-            Add PDFs, notes and textbooks to keep your course materials close while you study.
-            Uploads are marked clearly while they sync.
-          </p>
-          <label className="primary-button">
-            {isUploading ? 'Uploading...' : 'Choose files'}
-            <input multiple onChange={(event) => onFileChange(event.target.files)} type="file" disabled={isUploading} />
-          </label>
-          {statusMessage && <p className="upload-status">{statusMessage}</p>}
+      <PageHeader eyebrow="Spaced review" title="Flashcards">
+        <span className="score-chip">{stats.dueNow} due</span>
+      </PageHeader>
+
+      <div className="flashcards-stats-row">
+        <div className="flashcard-stat">
+          <span className="flashcard-stat-value due">{stats.dueNow}</span>
+          <span className="flashcard-stat-label">Due now</span>
         </div>
-        <div className="section-card">
-          <div className="section-title">
-            <h2>Uploads</h2>
-            <label className="search-box compact">
-              <Search size={18} />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
-            </label>
-          </div>
-          {filtered.length === 0 ? (
-            <EmptyState icon={<FileText />} title="No uploads yet" body="Add PDFs, notes or textbooks for your study workspace." />
-          ) : (
-            <div className="file-list">
-              {filtered.map((file) => (
-                <article key={file.id}>
-                  <FileText />
-                  <div>
-                    <strong>{file.name}</strong>
-                    <span>{formatBytes(file.size)} saved {new Date(file.createdAt).toLocaleDateString()}</span>
-                    <span className={cx('upload-badge', file.status ?? 'pending_upload')}>
-                      {file.status === 'uploaded' ? 'Synced' : file.status === 'failed' ? 'Failed' : 'Sync pending'}
-                    </span>
-                    {file.error && <small>Could not finish syncing. Try again later.</small>}
-                  </div>
-                  <div className="file-actions">
-                    {file.url && <a href={file.url} target="_blank" rel="noreferrer">Open</a>}
-                    <button onClick={() => removeUpload(file.id)}><X size={16} /></button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+        <div className="flashcard-stat">
+          <span className="flashcard-stat-value weak">{stats.weak}</span>
+          <span className="flashcard-stat-label">Weak</span>
         </div>
-      </section>
+        <div className="flashcard-stat">
+          <span className="flashcard-stat-value strong">{stats.strong}</span>
+          <span className="flashcard-stat-label">Strong</span>
+        </div>
+        <div className="flashcard-stat">
+          <span className="flashcard-stat-value mastered">{stats.mastered}</span>
+          <span className="flashcard-stat-label">Mastered</span>
+        </div>
+      </div>
+
+      <div className={cx('flashcard-sync-status', syncMeta.dirty && 'queued', syncMeta.lastError && 'error')}>
+        {syncMeta.lastError ? <AlertCircle size={16} /> : syncMeta.dirty ? <Clock3 size={16} /> : <CheckCircle2 size={16} />}
+        <span>{syncStatusText}</span>
+      </div>
+
+      <div className="flashcard-progress-info">
+        <span>{currentIndex + 1} of {deck.length}</span>
+        <span className="flashcard-scroll-hint">
+          <ChevronDown size={16} /> Scroll to review cards
+        </span>
+      </div>
+
+      <div className="flashcard-feed" ref={feedRef}>
+        {deck.map((card, i) => (
+          <FlashcardCardUI
+            key={card.state.questionKey}
+            card={card}
+            index={i}
+            now={now}
+            onRate={(rating) => handleRate(card, rating)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -3777,7 +4086,8 @@ function App() {
             <Route path="courses/:code/quiz" element={<QuizSetupPage />} />
             <Route path="quiz/:code" element={<QuizPage />} />
             <Route path="schedule" element={<SchedulePage />} />
-            <Route path="study" element={<StudyPage />} />
+            <Route path="study" element={<FlashcardsPage />} />
+            <Route path="flashcards" element={<FlashcardsPage />} />
             <Route path="hub" element={<HubPage />} />
             <Route path="hub/:code" element={<CourseAnalyticsPage />} />
             <Route path="streaks" element={<StreaksPage />} />

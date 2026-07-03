@@ -1,3 +1,5 @@
+import type { FlashcardAttempt, FlashcardReviewState } from './flashcards'
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -40,6 +42,12 @@ export type BatchResultItem = {
   topicName: string
   courseCode: string
   isCorrect: boolean
+}
+
+export type FlashcardSyncPayload = {
+  attempts: FlashcardAttempt[]
+  states: FlashcardReviewState[]
+  clientLastSyncedAt?: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -119,4 +127,17 @@ export async function seedMastery(
   kcStates: Record<string, Record<string, unknown>>,
 ): Promise<{ seeded: number; message: string }> {
   return apiPost('/user/seed-mastery', { kcStates }, userId)
+}
+
+export async function getUserFlashcards(
+  userId: string,
+): Promise<{ attempts: FlashcardAttempt[]; states: FlashcardReviewState[] }> {
+  return apiGet('/user/flashcards', userId)
+}
+
+export async function syncUserFlashcards(
+  userId: string,
+  payload: FlashcardSyncPayload,
+): Promise<{ status: string; attempts: number; states: number; syncedAt: string }> {
+  return apiPost('/user/flashcards/sync', payload, userId)
 }

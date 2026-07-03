@@ -272,6 +272,287 @@ async function handleAssistant(request, env) {
   return json({ answer: answer || 'No answer was returned by Gemma.' });
 }
 
+const FLASHCARD_TABLE_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS user_flashcard_attempts (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    question_key TEXT NOT NULL,
+    question_id TEXT DEFAULT '',
+    course_code TEXT NOT NULL,
+    course_title TEXT DEFAULT '',
+    topic_name TEXT DEFAULT '',
+    mode TEXT NOT NULL,
+    question_text TEXT NOT NULL,
+    options TEXT DEFAULT '[]',
+    selected_answer_text TEXT DEFAULT '',
+    selected_answer_index INTEGER,
+    correct_answer_text TEXT DEFAULT '',
+    correct_answer_index INTEGER,
+    is_correct INTEGER NOT NULL,
+    score REAL,
+    explanation TEXT DEFAULT '',
+    solution_steps TEXT DEFAULT '[]',
+    rag_sources TEXT DEFAULT '',
+    answered_at TEXT NOT NULL,
+    synced_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_flashcard_attempts_user_answered ON user_flashcard_attempts(user_id, answered_at)',
+  'CREATE INDEX IF NOT EXISTS idx_flashcard_attempts_user_question ON user_flashcard_attempts(user_id, question_key)',
+  `CREATE TABLE IF NOT EXISTS user_flashcard_states (
+    user_id TEXT NOT NULL,
+    question_key TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_answered_at TEXT NOT NULL,
+    last_reviewed_at TEXT DEFAULT '',
+    next_review_at TEXT NOT NULL,
+    stability_days REAL DEFAULT 1,
+    ease_factor REAL DEFAULT 2.3,
+    repetitions INTEGER DEFAULT 0,
+    lapses INTEGER DEFAULT 0,
+    last_result TEXT DEFAULT 'incorrect',
+    last_quality TEXT DEFAULT '',
+    synced_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, question_key)
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_flashcard_states_user_due ON user_flashcard_states(user_id, next_review_at)',
+];
+
+async function ensureFlashcardTables(db) {
+  for (const statement of FLASHCARD_TABLE_STATEMENTS) {
+    await db.prepare(statement).run();
+  }
+}
+
+function cleanString(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function cleanInteger(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.trunc(number) : null;
+}
+
+function cleanNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function jsonArrayString(value) {
+  if (!Array.isArray(value)) return '[]';
+  return JSON.stringify(value);
+}
+
+function parseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function mapFlashcardAttempt(row) {
+  const selectedAnswerIndex = row.selected_answer_index === null || row.selected_answer_index === undefined
+    ? undefined
+    : row.selected_answer_index;
+  const correctAnswerIndex = row.correct_answer_index === null || row.correct_answer_index === undefined
+    ? undefined
+    : row.correct_answer_index;
+  const score = row.score === null || row.score === undefined ? undefined : row.score;
+
+  return {
+    id: row.id,
+    questionKey: row.question_key,
+    questionId: row.question_id,
+    courseCode: row.course_code,
+    courseTitle: row.course_title,
+    topicName: row.topic_name,
+    mode: row.mode,
+    questionText: row.question_text,
+    options: parseJsonArray(row.options),
+    selectedAnswerText: row.selected_answer_text,
+    selectedAnswerIndex,
+    correctAnswerText: row.correct_answer_text,
+    correctAnswerIndex,
+    isCorrect: Boolean(row.is_correct),
+    score,
+    explanation: row.explanation || undefined,
+    solutionSteps: parseJsonArray(row.solution_steps),
+    ragSources: row.rag_sources || undefined,
+    answeredAt: row.answered_at,
+  };
+}
+
+function mapFlashcardState(row) {
+  return {
+    questionKey: row.question_key,
+    firstSeenAt: row.first_seen_at,
+    lastAnsweredAt: row.last_answered_at,
+    lastReviewedAt: row.last_reviewed_at || undefined,
+    nextReviewAt: row.next_review_at,
+    stabilityDays: row.stability_days,
+    easeFactor: row.ease_factor,
+    repetitions: row.repetitions,
+    lapses: row.lapses,
+    lastResult: row.last_result,
+    lastQuality: row.last_quality || undefined,
+  };
+}
+
+async function handleFlashcardSync(request, env) {
+  const body = await request.json();
+  const userId = getUserId(request, body);
+  if (!userId) return error('X-User-Id header or userId in body required', 401);
+
+  const db = env.QUESTIONS_DB;
+  await ensureFlashcardTables(db);
+
+  const attempts = Array.isArray(body.attempts) ? body.attempts.slice(0, 1000) : [];
+  const states = Array.isArray(body.states) ? body.states.slice(0, 1000) : [];
+  const now = new Date().toISOString();
+  let savedAttempts = 0;
+  let savedStates = 0;
+
+  for (const attempt of attempts) {
+    if (!attempt?.id || !attempt?.questionKey || !attempt?.courseCode || !attempt?.mode || !attempt?.answeredAt) continue;
+    await db.prepare(
+      `INSERT INTO user_flashcard_attempts (
+        id, user_id, question_key, question_id, course_code, course_title, topic_name, mode,
+        question_text, options, selected_answer_text, selected_answer_index, correct_answer_text,
+        correct_answer_index, is_correct, score, explanation, solution_steps, rag_sources,
+        answered_at, synced_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = excluded.user_id,
+        question_key = excluded.question_key,
+        question_id = excluded.question_id,
+        course_code = excluded.course_code,
+        course_title = excluded.course_title,
+        topic_name = excluded.topic_name,
+        mode = excluded.mode,
+        question_text = excluded.question_text,
+        options = excluded.options,
+        selected_answer_text = excluded.selected_answer_text,
+        selected_answer_index = excluded.selected_answer_index,
+        correct_answer_text = excluded.correct_answer_text,
+        correct_answer_index = excluded.correct_answer_index,
+        is_correct = excluded.is_correct,
+        score = excluded.score,
+        explanation = excluded.explanation,
+        solution_steps = excluded.solution_steps,
+        rag_sources = excluded.rag_sources,
+        answered_at = excluded.answered_at,
+        synced_at = excluded.synced_at,
+        updated_at = excluded.updated_at`
+    ).bind(
+      cleanString(attempt.id),
+      userId,
+      cleanString(attempt.questionKey),
+      cleanString(attempt.questionId),
+      cleanString(attempt.courseCode),
+      cleanString(attempt.courseTitle),
+      cleanString(attempt.topicName, 'General'),
+      cleanString(attempt.mode),
+      cleanString(attempt.questionText),
+      jsonArrayString(attempt.options),
+      cleanString(attempt.selectedAnswerText),
+      cleanInteger(attempt.selectedAnswerIndex),
+      cleanString(attempt.correctAnswerText),
+      cleanInteger(attempt.correctAnswerIndex),
+      attempt.isCorrect ? 1 : 0,
+      cleanNumber(attempt.score),
+      cleanString(attempt.explanation),
+      jsonArrayString(attempt.solutionSteps),
+      cleanString(attempt.ragSources),
+      cleanString(attempt.answeredAt),
+      now,
+      now,
+    ).run();
+    savedAttempts++;
+  }
+
+  for (const state of states) {
+    if (!state?.questionKey || !state?.firstSeenAt || !state?.lastAnsweredAt || !state?.nextReviewAt) continue;
+    await db.prepare(
+      `INSERT INTO user_flashcard_states (
+        user_id, question_key, first_seen_at, last_answered_at, last_reviewed_at, next_review_at,
+        stability_days, ease_factor, repetitions, lapses, last_result, last_quality, synced_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, question_key) DO UPDATE SET
+        first_seen_at = excluded.first_seen_at,
+        last_answered_at = excluded.last_answered_at,
+        last_reviewed_at = excluded.last_reviewed_at,
+        next_review_at = excluded.next_review_at,
+        stability_days = excluded.stability_days,
+        ease_factor = excluded.ease_factor,
+        repetitions = excluded.repetitions,
+        lapses = excluded.lapses,
+        last_result = excluded.last_result,
+        last_quality = excluded.last_quality,
+        synced_at = excluded.synced_at,
+        updated_at = excluded.updated_at`
+    ).bind(
+      userId,
+      cleanString(state.questionKey),
+      cleanString(state.firstSeenAt),
+      cleanString(state.lastAnsweredAt),
+      cleanString(state.lastReviewedAt),
+      cleanString(state.nextReviewAt),
+      cleanNumber(state.stabilityDays) ?? 1,
+      cleanNumber(state.easeFactor) ?? 2.3,
+      cleanInteger(state.repetitions) ?? 0,
+      cleanInteger(state.lapses) ?? 0,
+      state.lastResult === 'correct' ? 'correct' : 'incorrect',
+      cleanString(state.lastQuality),
+      now,
+      now,
+    ).run();
+    savedStates++;
+  }
+
+  return json({ status: 'synced', attempts: savedAttempts, states: savedStates, syncedAt: now });
+}
+
+async function handleGetFlashcards(request, env, url) {
+  const userId = request.headers.get('X-User-Id');
+  if (!userId) return error('X-User-Id header required', 401);
+
+  const db = env.QUESTIONS_DB;
+  await ensureFlashcardTables(db);
+
+  let limit = parseInt(url.searchParams.get('limit') || '1000', 10);
+  if (!Number.isFinite(limit) || limit < 1) limit = 1000;
+  limit = Math.min(limit, 5000);
+  const { results: attemptRows } = await db.prepare(
+    `SELECT id, user_id, question_key, question_id, course_code, course_title, topic_name, mode,
+            question_text, options, selected_answer_text, selected_answer_index, correct_answer_text,
+            correct_answer_index, is_correct, score, explanation, solution_steps, rag_sources,
+            answered_at, synced_at, updated_at
+     FROM user_flashcard_attempts
+     WHERE user_id = ?
+     ORDER BY answered_at DESC
+     LIMIT ?`
+  ).bind(userId, limit).all();
+
+  const { results: stateRows } = await db.prepare(
+    `SELECT user_id, question_key, first_seen_at, last_answered_at, last_reviewed_at, next_review_at,
+            stability_days, ease_factor, repetitions, lapses, last_result, last_quality, synced_at, updated_at
+     FROM user_flashcard_states
+     WHERE user_id = ?
+     ORDER BY next_review_at ASC`
+  ).bind(userId).all();
+
+  return json({
+    attempts: attemptRows.map(mapFlashcardAttempt),
+    states: stateRows.map(mapFlashcardState),
+  });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -300,6 +581,15 @@ export default {
       // ── AI assistant: Gemini-backed study helper ─────────────────
       if (path === '/assistant' && request.method === 'POST') {
         return handleAssistant(request, env);
+      }
+
+      // ── Flashcards: delayed web cache sync to D1 ─────────────────
+      if (path === '/user/flashcards/sync' && request.method === 'POST') {
+        return handleFlashcardSync(request, env);
+      }
+
+      if (path === '/user/flashcards' && request.method === 'GET') {
+        return handleGetFlashcards(request, env, url);
       }
 
       // ── Adaptive: Submit answer (stateless BKT + persistence) ─────────
