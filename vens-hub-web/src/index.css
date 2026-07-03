@@ -3986,6 +3986,14 @@ textarea:focus {
   top: 1rem;
   width: 48px;
   z-index: 30;
+  transition: opacity 250ms cubic-bezier(0.32, 0.72, 0, 1), transform 250ms cubic-bezier(0.32, 0.72, 0, 1), visibility 250ms;
+}
+
+.mobile-menu-button.sidebar-open {
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.8) rotate(-45deg);
+  pointer-events: none;
 }
 
   .sidebar {

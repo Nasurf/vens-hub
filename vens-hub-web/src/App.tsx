@@ -607,10 +607,43 @@ async function askAssistant(messages: AssistantMessage[], context?: string, syst
 
 function saveQuizAttempt(attempt: Omit<QuizAttempt, 'id' | 'createdAt'>) {
   const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
-  writeJson<QuizAttempt[]>(ATTEMPTS_KEY, [
-    { id: crypto.randomUUID(), createdAt: new Date().toISOString(), ...attempt },
-    ...attempts,
-  ])
+  const savedAttempt = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), ...attempt }
+  writeJson<QuizAttempt[]>(ATTEMPTS_KEY, [savedAttempt, ...attempts])
+  return savedAttempt
+}
+
+function mergeQuizAttempts(local: QuizAttempt[], remote: QuizAttempt[]) {
+  const byId = new Map<string, QuizAttempt>()
+  for (const attempt of [...remote, ...local]) {
+    if (attempt?.id) byId.set(attempt.id, attempt)
+  }
+  return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+async function fetchUserQuizAttempts(userId: string): Promise<QuizAttempt[]> {
+  const response = await fetch(`${API_BASE}/user/quiz-attempts`, {
+    headers: { Accept: 'application/json', 'X-User-Id': userId },
+  })
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(detail || `Quiz attempt request failed with status ${response.status}`)
+  }
+  const data = (await response.json()) as { attempts?: QuizAttempt[] }
+  return data.attempts ?? []
+}
+
+async function syncUserQuizAttempts(userId: string, attempts: QuizAttempt[]) {
+  if (attempts.length === 0) return { status: 'skipped', attempts: 0 }
+  const response = await fetch(`${API_BASE}/user/quiz-attempts/sync`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-User-Id': userId },
+    body: JSON.stringify({ attempts }),
+  })
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(detail || `Quiz attempt sync failed with status ${response.status}`)
+  }
+  return response.json() as Promise<{ status: string; attempts: number }>
 }
 
 function useAsync<T>(key: string, loader: () => Promise<T>) {
@@ -1650,6 +1683,42 @@ function useFlashcardDatabaseSync(userId: string | null) {
   return { meta, isSyncing }
 }
 
+function useQuizAttemptDatabaseSync(userId: string | null) {
+  const hydratedUserRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!userId || hydratedUserRef.current === userId) return
+    hydratedUserRef.current = userId
+    let active = true
+
+    fetchUserQuizAttempts(userId)
+      .then((remoteAttempts) => {
+        if (!active) return
+        const localAttempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
+        const mergedAttempts = mergeQuizAttempts(localAttempts, remoteAttempts)
+        const localIds = new Set(localAttempts.map((attempt) => attempt.id))
+        const remoteIds = new Set(remoteAttempts.map((attempt) => attempt.id))
+        const hasRemoteOnly = remoteAttempts.some((attempt) => !localIds.has(attempt.id))
+        const hasLocalOnly = localAttempts.some((attempt) => !remoteIds.has(attempt.id))
+
+        if (hasRemoteOnly) {
+          writeJson<QuizAttempt[]>(ATTEMPTS_KEY, mergedAttempts)
+        }
+        if (hasLocalOnly) {
+          syncUserQuizAttempts(userId, mergedAttempts).catch(() => {})
+        }
+      })
+      .catch(() => {
+        const localAttempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
+        if (localAttempts.length > 0) syncUserQuizAttempts(userId, localAttempts).catch(() => {})
+      })
+
+    return () => {
+      active = false
+    }
+  }, [userId])
+}
+
 function AppShell() {
   const profile = useProfile()
   const firebaseUser = useFirebaseUser()
@@ -1657,6 +1726,7 @@ function AppShell() {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   useFlashcardDatabaseSync(userId)
+  useQuizAttemptDatabaseSync(userId)
 
   useEffect(() => {
     if (!userId) return
@@ -1697,7 +1767,7 @@ function AppShell() {
 
   return (
     <div className="app-shell">
-      <button className="mobile-menu-button" onClick={() => setMobileMenuOpen(true)}>
+      <button className={cx('mobile-menu-button', mobileMenuOpen && 'sidebar-open')} onClick={() => setMobileMenuOpen(true)}>
         <Menu />
       </button>
       <aside className={cx('sidebar', mobileMenuOpen && 'open')}>
@@ -1881,16 +1951,6 @@ function DashboardPage() {
         </div>
         <BrandMark className="hub-hero-mark" />
       </section>
-
-      {/* Analytics */}
-      <div>
-        <div className="metrics-grid dashboard-metrics">
-          <MetricCard icon={<GraduationCap />} label="My courses" value={selectedCourses.length} hint="Selected during setup" />
-          <MetricCard icon={<BookOpen />} label="Questions answered" value={attempts.reduce((sum, a) => sum + a.total, 0)} hint="Across all quizzes" />
-          <MetricCard icon={<Flame />} label="Study streak" value={streakStats.currentStreak} hint={streakStats.completedToday ? 'Completed today' : 'Take a quiz today'} to="/app/streaks" />
-          <MetricCard icon={<Trophy />} label="Quiz attempts" value={attempts.length} hint="Tracked in Hub" />
-        </div>
-      </div>
 
       <section className="streak-dashboard-card">
         <div>
@@ -2423,7 +2483,7 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
     setShowExplanation(false)
     if (answers.length >= mcqQuestions.length) {
       setFinished(true)
-      saveQuizAttempt({
+      const savedAttempt = saveQuizAttempt({
         courseCode: code,
         courseTitle,
         mode: 'multiple-choice',
@@ -2432,6 +2492,9 @@ function MultipleChoiceQuizMode({ code, courseTitle, questions }: { code: string
       })
       // Submit batch to adaptive engine (fire-and-forget)
       const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
+      if (userId) {
+        syncUserQuizAttempts(userId, [savedAttempt]).catch(() => {})
+      }
       if (userId && !adaptiveSynced) {
         setAdaptiveSynced(true)
         const batchResults = answers.map((a) => ({
@@ -2646,6 +2709,7 @@ Use LaTeX notation for all mathematical expressions:
 }
 
 function TheoryQuizMode({ code, courseTitle, questions }: { code: string; courseTitle: string; questions: Question[] }) {
+  const firebaseUser = useFirebaseUser()
   const [index, setIndex] = useState(0)
   const [answer, setAnswer] = useState('')
   const [feedback, setFeedback] = useState<{ isCorrect: boolean; score: number; expected: string } | null>(null)
@@ -2680,7 +2744,9 @@ function TheoryQuizMode({ code, courseTitle, questions }: { code: string; course
     })
     recordFlashcardAttempt(fcTheory)
     if (next.length === questions.length) {
-      saveQuizAttempt({ courseCode: code, courseTitle, mode: 'theory', score: next.filter(Boolean).length, total: questions.length })
+      const savedAttempt = saveQuizAttempt({ courseCode: code, courseTitle, mode: 'theory', score: next.filter(Boolean).length, total: questions.length })
+      const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
+      if (userId) syncUserQuizAttempts(userId, [savedAttempt]).catch(() => {})
     }
   }
 
@@ -2736,6 +2802,7 @@ function TheoryQuizMode({ code, courseTitle, questions }: { code: string; course
 }
 
 function GapFillQuizMode({ code, courseTitle, questions }: { code: string; courseTitle: string; questions: Question[] }) {
+  const firebaseUser = useFirebaseUser()
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState('')
   const [feedback, setFeedback] = useState<boolean | null>(null)
@@ -2769,7 +2836,9 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
     })
     recordFlashcardAttempt(fcGap)
     if (next.length === questions.length) {
-      saveQuizAttempt({ courseCode: code, courseTitle, mode: 'gap-fill', score: next.filter(Boolean).length, total: questions.length })
+      const savedAttempt = saveQuizAttempt({ courseCode: code, courseTitle, mode: 'gap-fill', score: next.filter(Boolean).length, total: questions.length })
+      const userId = (firebaseUser as import('firebase/auth').User | null)?.uid
+      if (userId) syncUserQuizAttempts(userId, [savedAttempt]).catch(() => {})
     }
   }
 

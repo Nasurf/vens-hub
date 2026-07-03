@@ -325,6 +325,29 @@ async function ensureFlashcardTables(db) {
   }
 }
 
+const QUIZ_ATTEMPT_TABLE_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS user_quiz_attempts (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    course_code TEXT NOT NULL,
+    course_title TEXT DEFAULT '',
+    mode TEXT DEFAULT '',
+    score INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    synced_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user_created ON user_quiz_attempts(user_id, created_at)',
+  'CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user_course ON user_quiz_attempts(user_id, course_code)',
+];
+
+async function ensureQuizAttemptTables(db) {
+  for (const statement of QUIZ_ATTEMPT_TABLE_STATEMENTS) {
+    await db.prepare(statement).run();
+  }
+}
+
 function cleanString(value, fallback = '') {
   if (value === null || value === undefined) return fallback;
   return String(value);
@@ -354,6 +377,86 @@ function parseJsonArray(value) {
   } catch {
     return [];
   }
+}
+
+function mapQuizAttempt(row) {
+  return {
+    id: row.id,
+    courseCode: row.course_code,
+    courseTitle: row.course_title,
+    mode: row.mode || undefined,
+    score: row.score,
+    total: row.total,
+    createdAt: row.created_at,
+  };
+}
+
+async function handleQuizAttemptSync(request, env) {
+  const body = await request.json();
+  const userId = getUserId(request, body);
+  if (!userId) return error('X-User-Id header or userId in body required', 401);
+
+  const db = env.QUESTIONS_DB;
+  await ensureQuizAttemptTables(db);
+
+  const attempts = Array.isArray(body.attempts) ? body.attempts.slice(0, 1000) : [];
+  const now = new Date().toISOString();
+  let saved = 0;
+
+  for (const attempt of attempts) {
+    if (!attempt?.id || !attempt?.courseCode || attempt.score === undefined || attempt.total === undefined || !attempt?.createdAt) continue;
+    await db.prepare(
+      `INSERT INTO user_quiz_attempts (
+        id, user_id, course_code, course_title, mode, score, total, created_at, synced_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = excluded.user_id,
+        course_code = excluded.course_code,
+        course_title = excluded.course_title,
+        mode = excluded.mode,
+        score = excluded.score,
+        total = excluded.total,
+        created_at = excluded.created_at,
+        synced_at = excluded.synced_at,
+        updated_at = excluded.updated_at`
+    ).bind(
+      cleanString(attempt.id),
+      userId,
+      cleanString(attempt.courseCode),
+      cleanString(attempt.courseTitle),
+      cleanString(attempt.mode),
+      cleanInteger(attempt.score) ?? 0,
+      cleanInteger(attempt.total) ?? 0,
+      cleanString(attempt.createdAt),
+      now,
+      now
+    ).run();
+    saved++;
+  }
+
+  return json({ status: 'synced', attempts: saved, syncedAt: now });
+}
+
+async function handleGetQuizAttempts(request, env, url) {
+  const userId = request.headers.get('X-User-Id');
+  if (!userId) return error('X-User-Id header required', 401);
+
+  const db = env.QUESTIONS_DB;
+  await ensureQuizAttemptTables(db);
+
+  let limit = parseInt(url.searchParams.get('limit') || '1000', 10);
+  if (!Number.isFinite(limit) || limit < 1) limit = 1000;
+  limit = Math.min(limit, 1000);
+
+  const { results } = await db.prepare(
+    `SELECT id, course_code, course_title, mode, score, total, created_at
+     FROM user_quiz_attempts
+     WHERE user_id = ?
+     ORDER BY created_at DESC
+     LIMIT ?`
+  ).bind(userId, limit).all();
+
+  return json({ attempts: results.map(mapQuizAttempt) });
 }
 
 function mapFlashcardAttempt(row) {
@@ -599,6 +702,15 @@ export default {
 
       if (path === '/user/flashcards' && request.method === 'GET') {
         return handleGetFlashcards(request, env, url);
+      }
+
+      // ── Quiz summaries: local web cache sync to D1 ─────────────────
+      if (path === '/user/quiz-attempts/sync' && request.method === 'POST') {
+        return handleQuizAttemptSync(request, env);
+      }
+
+      if (path === '/user/quiz-attempts' && request.method === 'GET') {
+        return handleGetQuizAttempts(request, env, url);
       }
 
       // ── Adaptive: Submit answer (stateless BKT + persistence) ─────────
