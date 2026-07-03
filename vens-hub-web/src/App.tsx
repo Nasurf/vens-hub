@@ -23,6 +23,8 @@ import {
   ChevronRight,
   CircleUserRound,
   ClipboardList,
+  Eye,
+  EyeOff,
   FileText,
   Flame,
   GraduationCap,
@@ -1039,6 +1041,7 @@ function LoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -1119,9 +1122,18 @@ function LoginPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Enter your password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 disabled={loading}
               />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </span>
           </label>
           {error && <p className="form-error">{error}</p>}
@@ -1159,6 +1171,8 @@ function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -1178,7 +1192,7 @@ function RegisterPage() {
   const canContinue =
     (step === 0 && firstName.trim() && lastName.trim()) ||
     (step === 1 && departmentCode) ||
-    (step === 2 && selectedCourses.length > 0) ||
+    (step === 2 && selectedCourses.length >= 3) ||
     (step === 3 && email.includes('@') && password.length >= 6 && password === confirmPassword)
 
   // Fetch courses with search + pagination
@@ -1323,7 +1337,7 @@ function RegisterPage() {
           <h1>Create Account</h1>
           <p>Follow the steps to set up your web workspace.</p>
           {['Your Name', 'Your Department', 'Courses', 'Account'].map((title, index) => (
-            <div className={cx('step-row', step === index && 'active', step > index && 'done')} key={title}>
+            <div className={cx('step-row', step === index && 'active', step > index && 'done')} key={title} aria-current={step === index ? 'step' : undefined}>
               <span>{step > index ? <CheckCircle2 size={16} /> : index + 1}</span>
               <strong>{title}</strong>
             </div>
@@ -1355,6 +1369,8 @@ function RegisterPage() {
                     className={cx(departmentCode === department.code && 'selected')}
                     key={department.code}
                     onClick={() => handleDepartmentSelect(department.code, department.name)}
+                    aria-pressed={departmentCode === department.code}
+                    aria-label={department.name}
                   >
                     <Building2 size={18} /> {department.name}
                   </button>
@@ -1363,8 +1379,8 @@ function RegisterPage() {
             </StepPanel>
           )}
           {step === 2 && (
-            <StepPanel icon={<BookOpen />} title="Pick your courses (up to 10)">
-              <p className="step-hint">These will appear on your dashboard. You can change them later.</p>
+            <StepPanel icon={<BookOpen />} title="Pick at least 3 courses">
+              <p className="step-hint">Select your courses for this semester. You can change them later.</p>
               <div className="course-search-row">
                 <Search size={16} />
                 <input
@@ -1402,6 +1418,8 @@ function RegisterPage() {
                           key={course.code}
                           onClick={() => toggleCourse(course)}
                           type="button"
+                          aria-pressed={isSelected}
+                          aria-label={`${course.title} (${course.code})`}
                         >
                           <div className="course-select-topline">
                             <span className="course-select-code">{course.code}</span>
@@ -1429,8 +1447,8 @@ function RegisterPage() {
                   )}
                 </>
               )}
-              <p className="course-select-count" style={{ marginTop: '0.75rem' }}>
-                {selectedCourses.length} selected{selectedCourses.length >= 10 ? ' (max reached)' : ` of 10 max`}
+              <p className={cx('course-select-count', selectedCourses.length > 0 && selectedCourses.length < 3 && 'course-count-warning')} style={{ marginTop: '0.75rem' }}>
+                {selectedCourses.length} selected{selectedCourses.length < 3 ? ` (${3 - selectedCourses.length} more needed)` : selectedCourses.length >= 10 ? ' (max reached)' : ` of 10 max`}
               </p>
             </StepPanel>
           )}
@@ -1442,11 +1460,33 @@ function RegisterPage() {
               </label>
               <label>
                 Create password
-                <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" disabled={loading} aria-label="Create password" />
+                <span className="password-field">
+                  <input value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? 'text' : 'password'} disabled={loading} aria-label="Create password" />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </span>
               </label>
               <label>
                 Confirm password
-                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" disabled={loading} aria-label="Confirm password" />
+                <span className="password-field">
+                  <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type={showConfirmPassword ? 'text' : 'password'} disabled={loading} aria-label="Confirm password" />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </span>
               </label>
               {error && <p className="form-error">{error}</p>}
               <div className="auth-divider"><span>or</span></div>

@@ -280,7 +280,6 @@ label {
   border-radius: var(--radius-xl);
   background: var(--panel);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(20px);
 }
 
 .landing-copy,
@@ -598,6 +597,44 @@ label {
   padding-left: 2.8rem;
 }
 
+.password-field {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 2.8rem;
+  width: 100%;
+}
+
+.password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  height: 100%;
+  justify-items: center;
+  padding: 0 0.5rem;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 40px;
+  transition: color 160ms ease-out;
+}
+
+.password-toggle:hover {
+  color: var(--ink);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
 .form-error {
   color: var(--danger) !important;
   font-weight: 700;
@@ -824,6 +861,11 @@ label {
   transform: scale(0.98);
 }
 
+.selection-grid button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .selection-grid button.selected {
   background: var(--primary-soft);
   border-color: var(--primary);
@@ -867,6 +909,15 @@ label {
 .course-select-card.selected {
   background: var(--primary-soft);
   border-color: var(--primary);
+}
+
+.course-select-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.course-select-card:active {
+  transform: scale(0.98);
 }
 
 [data-theme="dark"] .course-select-card.selected {
@@ -946,6 +997,14 @@ label {
   color: var(--muted);
   margin-top: 0.75rem;
   text-align: center;
+}
+
+.course-count-warning {
+  color: #d97706;
+}
+
+[data-theme="dark"] .course-count-warning {
+  color: #fbbf24;
 }
 
 .course-search-row {
@@ -4160,6 +4219,60 @@ textarea:focus {
   .file-list article,
   .attempt-list article {
     grid-template-columns: 1fr;
+  }
+
+  .signup-form-panel {
+    padding: 1.25rem;
+  }
+
+  .step-panel {
+    gap: 1.5rem;
+  }
+
+  .speech-heading > span {
+    height: 46px;
+    width: 46px;
+  }
+
+  .selection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .course-select-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .course-search-row {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .signup-actions {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .signup-progress h1 {
+    font-size: 1.8rem;
+    margin-top: 2rem;
+  }
+
+  .step-row {
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+  }
+
+  .step-row span {
+    height: 30px;
+    width: 30px;
+    font-size: 0.8rem;
+  }
+
+  .speech-heading h2 {
+    font-size: 1.3rem;
+  }
+
+  input, textarea, select {
+    font-size: 16px;
   }
 }
 
