@@ -457,6 +457,29 @@ async function fetchJson<T>(path: string): Promise<T> {
   return (await response.json()) as T
 }
 
+async function fetchUserProfile(userId: string): Promise<Profile | null> {
+  const response = await fetch(`${API_BASE}/user/profile`, {
+    headers: { Accept: 'application/json', 'X-User-Id': userId },
+  })
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(detail || `Profile request failed with status ${response.status}`)
+  }
+  const data = (await response.json()) as { profile?: Profile | null }
+  return data.profile ?? null
+}
+
+function profileFromGoogleAccount(user: { displayName?: string | null; email?: string | null }): Profile {
+  return {
+    firstName: user.displayName?.split(' ')[0] || 'User',
+    lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+    email: user.email || '',
+    departmentCode: '',
+    departmentName: '',
+    selectedCourses: [],
+  }
+}
+
 async function postJson<T>(baseUrl: string, path: string, body: unknown): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
@@ -970,7 +993,20 @@ function LoginPage() {
         setLoading(false)
         return
       }
-      await loginWithEmail(email, password)
+      const user = await loginWithEmail(email, password)
+      const remoteProfile = await fetchUserProfile(user.uid).catch(() => null)
+      if (remoteProfile) {
+        saveProfile(remoteProfile)
+      } else {
+        saveProfile({
+          firstName: user.displayName?.split(' ')[0] || user.email?.split('@')[0] || 'User',
+          lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+          email: user.email || email,
+          departmentCode: '',
+          departmentName: '',
+          selectedCourses: [],
+        })
+      }
       navigate('/app')
     } catch (err: any) {
       const code = err?.code || ''
@@ -995,16 +1031,8 @@ function LoginPage() {
     setLoading(true)
     try {
       const user = await loginWithGoogle()
-      // Build profile from Google account data
-      const profile: Profile = {
-        firstName: user.displayName?.split(' ')[0] || 'User',
-        lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-        email: user.email || '',
-        departmentCode: '',
-        departmentName: '',
-        selectedCourses: [],
-      }
-      saveProfile(profile)
+      const remoteProfile = await fetchUserProfile(user.uid).catch(() => null)
+      saveProfile(remoteProfile ?? profileFromGoogleAccount(user))
       navigate('/app')
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user') {
@@ -1617,6 +1645,20 @@ function AppShell() {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   useFlashcardDatabaseSync(userId)
+
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+    fetchUserProfile(userId)
+      .then((remoteProfile) => {
+        if (active && remoteProfile) saveProfile(remoteProfile)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [userId])
+
   const navItems = [
     { to: '/app', label: 'Home', icon: <Home size={22} />, end: true },
     { to: '/app/schedule', label: 'Schedule', icon: <CalendarDays size={22} /> },
