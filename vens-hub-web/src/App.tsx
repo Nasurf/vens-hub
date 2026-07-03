@@ -19,6 +19,7 @@ import {
   Clock3,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleUserRound,
   ClipboardList,
@@ -49,7 +50,6 @@ import {
   Trash2,
   Trophy,
   MapPin,
-  MoreVertical,
   UploadCloud,
   Users,
   User,
@@ -2613,6 +2613,44 @@ function GapFillQuizMode({ code, courseTitle, questions }: { code: string; cours
 }
 
 
+/* ─── Schedule helpers ────────────────────────────────────────────────────── */
+
+const SLOT_PX = 48          // pixels per 30-min slot
+const HOUR_PX = SLOT_PX * 2 // 96 px per hour
+const SCHEDULE_START = 7     // 07:00
+const SCHEDULE_END = 22     // 22:00
+
+const TIME_SLOTS: string[] = []
+for (let h = SCHEDULE_START; h < SCHEDULE_END; h++) {
+  TIME_SLOTS.push(`${String(h).padStart(2, '0')}:00`)
+  TIME_SLOTS.push(`${String(h).padStart(2, '0')}:30`)
+}
+
+function timeToMinutes(t: string) {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+function eventTop(start: string) {
+  return ((timeToMinutes(start) - SCHEDULE_START * 60) / 30) * SLOT_PX
+}
+
+function eventHeight(start: string, end: string) {
+  return Math.max(((timeToMinutes(end) - timeToMinutes(start)) / 30) * SLOT_PX, SLOT_PX)
+}
+
+const TYPE_TONE: Record<string, number> = {
+  'Study block': 0,
+  'Lecture': 1,
+  'Quiz': 2,
+  'Deadline': 3,
+  'Group meeting': 0,
+}
+
+function typeTone(type?: string) {
+  return (TYPE_TONE[type ?? ''] ?? 0)
+}
+
 function SchedulePage() {
   const profile = useProfile()
   const defaultCourse = profile?.selectedCourses?.[0]?.code ?? ''
@@ -2653,10 +2691,17 @@ function SchedulePage() {
   const isEndBeforeStart = form.end <= form.start
   const canSaveEvent = form.title.trim().length > 0 && !isEndBeforeStart
   const firstName = profile?.firstName ?? 'Engineer'
-  const sampleEvents = ['Diagnostic test', 'Team planning', 'Interns visit', 'Online visit', 'Follow-up']
 
   function selectDate(date: Date) {
     setForm((value) => ({ ...value, date: dateToIso(date) }))
+  }
+
+  function navigateWeek(direction: -1 | 1) {
+    setForm((value) => {
+      const date = new Date(`${value.date}T00:00:00`)
+      date.setDate(date.getDate() + direction * 7)
+      return { ...value, date: dateToIso(date) }
+    })
   }
 
   function openAddModal(date = form.date) {
@@ -2734,23 +2779,64 @@ function SchedulePage() {
 
       <section className="schedule-board section-card">
         <div className="schedule-toolbar">
-          <button className="schedule-range" type="button">{format(weekDays[0], 'MMM d')}–{format(weekDays[6], 'd')} <ChevronDown size={16} /></button>
+          <div className="schedule-nav-row">
+            <button className="ghost-button icon-only" onClick={() => navigateWeek(-1)} type="button" aria-label="Previous week"><ChevronLeft size={18} /></button>
+            <button className="schedule-range" type="button" onClick={() => selectDate(new Date())}>{format(weekDays[0], 'MMM d')}–{format(weekDays[6], 'd, yyyy')}</button>
+            <button className="ghost-button icon-only" onClick={() => navigateWeek(1)} type="button" aria-label="Next week"><ChevronRight size={18} /></button>
+          </div>
           <div className="schedule-view-tabs" role="tablist" aria-label="Schedule view">
-            {(['day', 'week', 'month'] as const).map((mode) => <button key={mode} className={cx(viewMode === mode && 'active')} onClick={() => setViewMode(mode)} type="button">{mode}</button>)}
+            {(['day', 'week'] as const).map((mode) => <button key={mode} className={cx(viewMode === mode && 'active')} onClick={() => setViewMode(mode)} type="button">{mode}</button>)}
           </div>
         </div>
         <div className="week-strip">
-          <span className="week-corner">W</span>
-          {weekDays.map((day) => <button key={dateToIso(day)} className={cx('week-day-card', isSameDay(day, selectedDate) && 'selected', isToday(day) && 'today')} onClick={() => selectDate(day)} type="button"><span>{format(day, 'EEE')}</span><strong>{format(day, 'dd/MM')}</strong></button>)}
+          {viewMode === 'week' && <span className="week-corner">W</span>}
+          {(viewMode === 'day' ? weekDays.filter((d) => isSameDay(d, selectedDate)) : weekDays).map((day) => <button key={dateToIso(day)} className={cx('week-day-card', isSameDay(day, selectedDate) && 'selected', isToday(day) && 'today')} onClick={() => selectDate(day)} type="button"><span>{format(day, 'EEE')}</span><strong>{format(day, 'dd/MM')}</strong></button>)}
         </div>
-        <div className="schedule-week-grid">
-          <div className="time-rail">{['07:00', '07:30', '08:00', '08:30', '09:00', '09:30'].map((time) => <span key={time}>{time}</span>)}</div>
-          {weekDays.map((day, dayIndex) => {
-            const iso = dateToIso(day)
-            const dayEvents = (eventsByDate[iso] ?? []).sort((a, b) => a.start.localeCompare(b.start))
-            const cards = dayEvents.length ? dayEvents : sampleEvents.slice(0, dayIndex % 3).map((title, i) => ({ id: `${iso}-${title}`, title, date: iso, start: `0${7 + i}:00`, end: `0${7 + i}:30`, course: i % 2 ? 'Primary Care' : 'Clinical Immunology', venue: i % 2 ? 'Room 312' : 'Room 200', type: title, priority: i === 0 ? 'High' : 'Medium', participants: 'TY, AB, NR', notes: '', reminder: 'None' }))
-            return <div className="schedule-day-column" key={iso}><AnimatePresence mode="popLayout">{cards.map((item, i) => <motion.article className={cx('schedule-event-card', `tone-${(i + dayIndex) % 4}`, dayEvents.length === 0 && 'sample')} key={item.id} custom={i} variants={eventVariants} initial="hidden" animate="visible" exit="exit" layout><div className="event-card-top"><span className="event-icon"><CalendarDays size={14} /></span>{dayEvents.length > 0 ? <button className="event-edit-icon" aria-label={`Edit ${item.title}`} onClick={() => openEditModal(item)} type="button"><Pencil size={14} /></button> : <MoreVertical size={15} />}</div><strong>{item.title}</strong><small>{item.venue || 'Vens campus'}</small>{item.notes && <p>{item.notes}</p>}<div className="event-card-meta"><span><Clock3 size={12} /> {item.start} - {item.end}</span>{dayEvents.length > 0 && <button aria-label={`Delete ${item.title}`} onClick={() => removeEvent(item.id)} type="button"><X size={13} /></button>}</div>{item.participants && <div className="avatar-row">{item.participants.split(',').slice(0, 4).map((person) => <span key={person.trim()}>{person.trim().slice(0, 2).toUpperCase()}</span>)}</div>}</motion.article>)}</AnimatePresence></div>
-          })}
+        <div className="schedule-week-scroll">
+          <div className={cx('schedule-week-grid', viewMode === 'day' && 'day-view')}>
+            <div className="time-rail">{TIME_SLOTS.map((t) => <span key={t}>{t}</span>)}</div>
+            {(viewMode === 'day' ? weekDays.filter((d) => isSameDay(d, selectedDate)) : weekDays).map((day) => {
+              const iso = dateToIso(day)
+              const dayEvents = (eventsByDate[iso] ?? []).sort((a, b) => a.start.localeCompare(b.start))
+              return (
+                <div className="schedule-day-column" key={iso}>
+                  {dayEvents.length === 0 ? (
+                    <div className="schedule-day-empty">
+                      <CalendarDays size={20} />
+                      <span>No events</span>
+                    </div>
+                  ) : (
+                    <AnimatePresence mode="popLayout">
+                      {dayEvents.map((item, i) => (
+                        <motion.article
+                          className={cx('schedule-event-card', `tone-${typeTone(item.type)}`)}
+                          key={item.id}
+                          style={{ position: 'absolute', top: eventTop(item.start), height: eventHeight(item.start, item.end) }}
+                          custom={i}
+                          variants={eventVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          layout
+                        >
+                          <div className="event-card-top">
+                            <span className="event-icon"><CalendarDays size={14} /></span>
+                            <button className="event-edit-icon" aria-label={`Edit ${item.title}`} onClick={() => openEditModal(item)} type="button"><Pencil size={14} /></button>
+                          </div>
+                          <strong>{item.title}</strong>
+                          {item.venue && <small>{item.venue}</small>}
+                          <div className="event-card-meta">
+                            <span><Clock3 size={12} /> {item.start}–{item.end}</span>
+                            <button aria-label={`Delete ${item.title}`} onClick={() => removeEvent(item.id)} type="button"><X size={13} /></button>
+                          </div>
+                        </motion.article>
+                      ))}
+                    </AnimatePresence>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       </section>
 
