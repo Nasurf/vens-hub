@@ -42,6 +42,9 @@ export type BatchResultItem = {
   topicName: string
   courseCode: string
   isCorrect: boolean
+  questionId?: number
+  selectedAnswerIndex?: number
+  elapsedSeconds?: number
 }
 
 export type FlashcardSyncPayload = {

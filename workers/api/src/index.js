@@ -415,107 +415,116 @@ async function handleFlashcardSync(request, env) {
   const attempts = Array.isArray(body.attempts) ? body.attempts.slice(0, 1000) : [];
   const states = Array.isArray(body.states) ? body.states.slice(0, 1000) : [];
   const now = new Date().toISOString();
-  let savedAttempts = 0;
-  let savedStates = 0;
 
+  // Validate and build statement arrays for batch execution
+  const attemptStatements = [];
   for (const attempt of attempts) {
     if (!attempt?.id || !attempt?.questionKey || !attempt?.courseCode || !attempt?.mode || !attempt?.answeredAt) continue;
-    await db.prepare(
-      `INSERT INTO user_flashcard_attempts (
-        id, user_id, question_key, question_id, course_code, course_title, topic_name, mode,
-        question_text, options, selected_answer_text, selected_answer_index, correct_answer_text,
-        correct_answer_index, is_correct, score, explanation, solution_steps, rag_sources,
-        answered_at, synced_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        user_id = excluded.user_id,
-        question_key = excluded.question_key,
-        question_id = excluded.question_id,
-        course_code = excluded.course_code,
-        course_title = excluded.course_title,
-        topic_name = excluded.topic_name,
-        mode = excluded.mode,
-        question_text = excluded.question_text,
-        options = excluded.options,
-        selected_answer_text = excluded.selected_answer_text,
-        selected_answer_index = excluded.selected_answer_index,
-        correct_answer_text = excluded.correct_answer_text,
-        correct_answer_index = excluded.correct_answer_index,
-        is_correct = excluded.is_correct,
-        score = excluded.score,
-        explanation = excluded.explanation,
-        solution_steps = excluded.solution_steps,
-        rag_sources = excluded.rag_sources,
-        answered_at = excluded.answered_at,
-        synced_at = excluded.synced_at,
-        updated_at = excluded.updated_at`
-    ).bind(
-      cleanString(attempt.id),
-      userId,
-      cleanString(attempt.questionKey),
-      cleanString(attempt.questionId),
-      cleanString(attempt.courseCode),
-      cleanString(attempt.courseTitle),
-      cleanString(attempt.topicName, 'General'),
-      cleanString(attempt.mode),
-      cleanString(attempt.questionText),
-      jsonArrayString(attempt.options),
-      cleanString(attempt.selectedAnswerText),
-      cleanInteger(attempt.selectedAnswerIndex),
-      cleanString(attempt.correctAnswerText),
-      cleanInteger(attempt.correctAnswerIndex),
-      attempt.isCorrect ? 1 : 0,
-      cleanNumber(attempt.score),
-      cleanString(attempt.explanation),
-      jsonArrayString(attempt.solutionSteps),
-      cleanString(attempt.ragSources),
-      cleanString(attempt.answeredAt),
-      now,
-      now,
-    ).run();
-    savedAttempts++;
+    attemptStatements.push(
+      db.prepare(
+        `INSERT INTO user_flashcard_attempts (
+          id, user_id, question_key, question_id, course_code, course_title, topic_name, mode,
+          question_text, options, selected_answer_text, selected_answer_index, correct_answer_text,
+          correct_answer_index, is_correct, score, explanation, solution_steps, rag_sources,
+          answered_at, synced_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          user_id = excluded.user_id,
+          question_key = excluded.question_key,
+          question_id = excluded.question_id,
+          course_code = excluded.course_code,
+          course_title = excluded.course_title,
+          topic_name = excluded.topic_name,
+          mode = excluded.mode,
+          question_text = excluded.question_text,
+          options = excluded.options,
+          selected_answer_text = excluded.selected_answer_text,
+          selected_answer_index = excluded.selected_answer_index,
+          correct_answer_text = excluded.correct_answer_text,
+          correct_answer_index = excluded.correct_answer_index,
+          is_correct = excluded.is_correct,
+          score = excluded.score,
+          explanation = excluded.explanation,
+          solution_steps = excluded.solution_steps,
+          rag_sources = excluded.rag_sources,
+          answered_at = excluded.answered_at,
+          synced_at = excluded.synced_at,
+          updated_at = excluded.updated_at`
+      ).bind(
+        cleanString(attempt.id),
+        userId,
+        cleanString(attempt.questionKey),
+        cleanString(attempt.questionId),
+        cleanString(attempt.courseCode),
+        cleanString(attempt.courseTitle),
+        cleanString(attempt.topicName, 'General'),
+        cleanString(attempt.mode),
+        cleanString(attempt.questionText),
+        jsonArrayString(attempt.options),
+        cleanString(attempt.selectedAnswerText),
+        cleanInteger(attempt.selectedAnswerIndex),
+        cleanString(attempt.correctAnswerText),
+        cleanInteger(attempt.correctAnswerIndex),
+        attempt.isCorrect ? 1 : 0,
+        cleanNumber(attempt.score),
+        cleanString(attempt.explanation),
+        jsonArrayString(attempt.solutionSteps),
+        cleanString(attempt.ragSources),
+        cleanString(attempt.answeredAt),
+        now,
+        now,
+      )
+    );
   }
 
+  const stateStatements = [];
   for (const state of states) {
     if (!state?.questionKey || !state?.firstSeenAt || !state?.lastAnsweredAt || !state?.nextReviewAt) continue;
-    await db.prepare(
-      `INSERT INTO user_flashcard_states (
-        user_id, question_key, first_seen_at, last_answered_at, last_reviewed_at, next_review_at,
-        stability_days, ease_factor, repetitions, lapses, last_result, last_quality, synced_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, question_key) DO UPDATE SET
-        first_seen_at = excluded.first_seen_at,
-        last_answered_at = excluded.last_answered_at,
-        last_reviewed_at = excluded.last_reviewed_at,
-        next_review_at = excluded.next_review_at,
-        stability_days = excluded.stability_days,
-        ease_factor = excluded.ease_factor,
-        repetitions = excluded.repetitions,
-        lapses = excluded.lapses,
-        last_result = excluded.last_result,
-        last_quality = excluded.last_quality,
-        synced_at = excluded.synced_at,
-        updated_at = excluded.updated_at`
-    ).bind(
-      userId,
-      cleanString(state.questionKey),
-      cleanString(state.firstSeenAt),
-      cleanString(state.lastAnsweredAt),
-      cleanString(state.lastReviewedAt),
-      cleanString(state.nextReviewAt),
-      cleanNumber(state.stabilityDays) ?? 1,
-      cleanNumber(state.easeFactor) ?? 2.3,
-      cleanInteger(state.repetitions) ?? 0,
-      cleanInteger(state.lapses) ?? 0,
-      state.lastResult === 'correct' ? 'correct' : 'incorrect',
-      cleanString(state.lastQuality),
-      now,
-      now,
-    ).run();
-    savedStates++;
+    stateStatements.push(
+      db.prepare(
+        `INSERT INTO user_flashcard_states (
+          user_id, question_key, first_seen_at, last_answered_at, last_reviewed_at, next_review_at,
+          stability_days, ease_factor, repetitions, lapses, last_result, last_quality, synced_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, question_key) DO UPDATE SET
+          first_seen_at = excluded.first_seen_at,
+          last_answered_at = excluded.last_answered_at,
+          last_reviewed_at = excluded.last_reviewed_at,
+          next_review_at = excluded.next_review_at,
+          stability_days = excluded.stability_days,
+          ease_factor = excluded.ease_factor,
+          repetitions = excluded.repetitions,
+          lapses = excluded.lapses,
+          last_result = excluded.last_result,
+          last_quality = excluded.last_quality,
+          synced_at = excluded.synced_at,
+          updated_at = excluded.updated_at`
+      ).bind(
+        userId,
+        cleanString(state.questionKey),
+        cleanString(state.firstSeenAt),
+        cleanString(state.lastAnsweredAt),
+        cleanString(state.lastReviewedAt),
+        cleanString(state.nextReviewAt),
+        cleanNumber(state.stabilityDays) ?? 1,
+        cleanNumber(state.easeFactor) ?? 2.3,
+        cleanInteger(state.repetitions) ?? 0,
+        cleanInteger(state.lapses) ?? 0,
+        state.lastResult === 'correct' ? 'correct' : 'incorrect',
+        cleanString(state.lastQuality),
+        now,
+        now,
+      )
+    );
   }
 
-  return json({ status: 'synced', attempts: savedAttempts, states: savedStates, syncedAt: now });
+  // Execute all statements in a single batch transaction (atomic, faster, fewer D1 write slots)
+  const allStatements = [...attemptStatements, ...stateStatements];
+  if (allStatements.length > 0) {
+    await db.batch(allStatements);
+  }
+
+  return json({ status: 'synced', attempts: attemptStatements.length, states: stateStatements.length, syncedAt: now });
 }
 
 async function handleGetFlashcards(request, env, url) {
@@ -596,17 +605,24 @@ export default {
       if (path === '/adaptive/submit-answer' && request.method === 'POST') {
         const body = await request.json();
 
-        // Validate
-        if (!body.questionId || body.selectedAnswerIndex === undefined || !body.attemptId) {
-          return error('questionId, selectedAnswerIndex, and attemptId required');
+        // Validate required fields
+        const questionId = cleanInteger(body.questionId);
+        const selectedAnswerIndex = cleanInteger(body.selectedAnswerIndex);
+        const attemptId = cleanString(body.attemptId);
+        if (!questionId || selectedAnswerIndex === null || selectedAnswerIndex === undefined || !attemptId) {
+          return error('questionId (int), selectedAnswerIndex (int), and attemptId (string) required');
+        }
+        if (selectedAnswerIndex < 0 || selectedAnswerIndex > 10) {
+          return error('selectedAnswerIndex out of range');
         }
 
         const userId = getUserId(request, body);
+        const clientElapsedSeconds = cleanInteger(body.clientElapsedSeconds) || 0;
 
         // Dedup — check if this attempt was already processed
         const existing = await db.prepare(
           'SELECT id FROM user_attempts WHERE id = ?'
-        ).bind(body.attemptId).all();
+        ).bind(attemptId).all();
 
         if (existing.results.length > 0) {
           // Attempt already processed — return cached if available, else skip
@@ -616,7 +632,7 @@ export default {
         // Load question from D1
         const { results } = await db.prepare(
           'SELECT id, course_code, correct_answer_index, correct_answer, correct_answer_text, explanation, topic_name FROM questions WHERE id = ?'
-        ).bind(body.questionId).all();
+        ).bind(questionId).all();
 
         if (results.length === 0) {
           return error('Question not found', 404);
@@ -655,7 +671,6 @@ export default {
         const now = new Date().toISOString();
 
         // Persist attempt
-        const attemptId = body.attemptId; // client-generated uuid
         await db.prepare(
           `INSERT INTO user_attempts (id, user_id, question_id, course_code, topic_name, is_correct, selected_answer_index, elapsed_seconds, mastery_before, mastery_after, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -666,8 +681,8 @@ export default {
           courseCode,
           topicName,
           isCorrect ? 1 : 0,
-          body.selectedAnswerIndex,
-          body.clientElapsedSeconds || 0,
+          selectedAnswerIndex,
+          clientElapsedSeconds,
           masteryBefore,
           masteryAfter,
           now
@@ -720,9 +735,9 @@ export default {
         });
       }
 
-      // ── Adaptive: Batch submit (quiz completion — no D1 lookup needed) ──
-      // Flutter quiz screens know topic, courseCode, and correctness locally.
-      // This endpoint accepts per-topic results, runs BKT, and persists.
+      // ── Adaptive: Batch submit (quiz completion) ──
+      // Accepts per-topic results with optional questionId. Runs BKT and persists.
+      // Clients send: { topicName, courseCode, isCorrect, questionId?, selectedAnswerIndex?, elapsedSeconds? }
       if (path === '/adaptive/submit-batch' && request.method === 'POST') {
         const body = await request.json();
         const userId = getUserId(request, body);
@@ -732,12 +747,29 @@ export default {
           return error('results array required');
         }
 
+        // Validate each item in the batch
+        const validResults = [];
+        for (const item of results) {
+          if (!item || typeof item !== 'object') continue;
+          const topicName = cleanString(item.topicName);
+          const courseCode = cleanString(item.courseCode);
+          if (!topicName || !courseCode) continue;
+          const isCorrect = Boolean(item.isCorrect);
+          const questionId = cleanInteger(item.questionId); // nullable — legacy clients omit this
+          const selectedAnswerIndex = cleanInteger(item.selectedAnswerIndex);
+          const elapsedSeconds = cleanInteger(item.elapsedSeconds) || 0;
+          validResults.push({ topicName, courseCode, isCorrect, questionId, selectedAnswerIndex, elapsedSeconds });
+        }
+
+        if (validResults.length === 0) {
+          return error('No valid results in batch — each item needs topicName and courseCode');
+        }
+
         const now = new Date().toISOString();
         let applied = 0;
 
-        for (const item of results) {
-          const { topicName, courseCode, isCorrect } = item;
-          if (!topicName || !courseCode) continue;
+        for (const item of validResults) {
+          const { topicName, courseCode, isCorrect, questionId, selectedAnswerIndex, elapsedSeconds } = item;
 
           // Load existing mastery from D1 for this user+topic
           let kcState = null;
@@ -757,9 +789,9 @@ export default {
           }
 
           // Run BKT
-          const { newState, masteryBefore, masteryAfter } = applyBktUpdate(kcState, !!isCorrect, DEFAULT_PARAMS);
+          const { newState, masteryBefore, masteryAfter } = applyBktUpdate(kcState, isCorrect, DEFAULT_PARAMS);
 
-          // Persist attempt record
+          // Persist attempt record — use real questionId when provided, fallback to -1
           const attemptId = crypto.randomUUID();
           await db.prepare(
             `INSERT INTO user_attempts (id, user_id, question_id, course_code, topic_name, is_correct, selected_answer_index, elapsed_seconds, mastery_before, mastery_after, created_at)
@@ -767,12 +799,12 @@ export default {
           ).bind(
             attemptId,
             userId || '',
-            -1, // batch submissions have no specific question ID
+            questionId ?? -1,
             courseCode,
             topicName,
             isCorrect ? 1 : 0,
-            -1,
-            0,
+            selectedAnswerIndex ?? -1,
+            elapsedSeconds,
             masteryBefore,
             masteryAfter,
             now

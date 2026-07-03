@@ -5539,10 +5539,10 @@ textarea:focus {
   gap: 1.25rem;
   max-height: calc(100dvh - 9rem);
   overflow-y: auto;
-  scroll-snap-type: y mandatory;
-  scroll-behavior: smooth;
+  scroll-snap-type: y proximity;
   -webkit-overflow-scrolling: touch;
   padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain;
 }
 
 .flashcard-feed::-webkit-scrollbar {

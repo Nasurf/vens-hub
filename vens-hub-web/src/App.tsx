@@ -3360,7 +3360,7 @@ function FlashcardsPage() {
           }
         }
       },
-      { root: feed, threshold: 0.6 },
+      { root: feed, threshold: 0.3 },
     )
     const cards = feed.querySelectorAll('.flashcard-card')
     cards.forEach((c) => observer.observe(c))
