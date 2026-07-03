@@ -469,6 +469,19 @@ async function fetchUserProfile(userId: string): Promise<Profile | null> {
   return data.profile ?? null
 }
 
+async function saveUserProfile(userId: string, profile: Profile) {
+  const response = await fetch(`${API_BASE}/user/profile`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-User-Id': userId },
+    body: JSON.stringify(profile),
+  })
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(detail || `Profile save failed with status ${response.status}`)
+  }
+  return response.json() as Promise<{ ok: boolean; userId: string }>
+}
+
 function profileFromGoogleAccount(user: { displayName?: string | null; email?: string | null }): Profile {
   return {
     firstName: user.displayName?.split(' ')[0] || 'User',
@@ -689,7 +702,6 @@ function Logo({ compact = false, className }: { compact?: boolean; className?: s
       {!compact && (
         <span>
           <strong>Vens Hub</strong>
-          <small>Engineering Hub</small>
         </span>
       )}
     </Link>
@@ -998,14 +1010,19 @@ function LoginPage() {
       if (remoteProfile) {
         saveProfile(remoteProfile)
       } else {
-        saveProfile({
+        const localProfile = getProfile()
+        const fallbackProfile = localProfile?.departmentCode ? localProfile : {
           firstName: user.displayName?.split(' ')[0] || user.email?.split('@')[0] || 'User',
           lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
           email: user.email || email,
           departmentCode: '',
           departmentName: '',
           selectedCourses: [],
-        })
+        }
+        if (fallbackProfile.departmentCode) {
+          await saveUserProfile(user.uid, fallbackProfile).catch(() => {})
+        }
+        saveProfile(fallbackProfile)
       }
       navigate('/app')
     } catch (err: any) {
@@ -1032,7 +1049,12 @@ function LoginPage() {
     try {
       const user = await loginWithGoogle()
       const remoteProfile = await fetchUserProfile(user.uid).catch(() => null)
-      saveProfile(remoteProfile ?? profileFromGoogleAccount(user))
+      const localProfile = getProfile()
+      const fallbackProfile = localProfile?.departmentCode ? localProfile : profileFromGoogleAccount(user)
+      if (!remoteProfile && fallbackProfile.departmentCode) {
+        await saveUserProfile(user.uid, fallbackProfile).catch(() => {})
+      }
+      saveProfile(remoteProfile ?? fallbackProfile)
       navigate('/app')
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user') {
@@ -1216,12 +1238,7 @@ function RegisterPage() {
 
       const user = await registerWithEmail(email, password)
 
-      // Save to Worker (best-effort)
-      fetch(`${API_BASE}/user/profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-Id': user.uid },
-        body: JSON.stringify(profileData),
-      }).catch(() => {})
+      await saveUserProfile(user.uid, profileData)
 
       // Save to localStorage (fast cache)
       saveProfile(profileData)
@@ -1256,11 +1273,7 @@ function RegisterPage() {
         departmentName: selectedDepartment.name,
         selectedCourses,
       }
-      fetch(`${API_BASE}/user/profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-Id': user.uid },
-        body: JSON.stringify(profileData),
-      }).catch(() => {})
+      await saveUserProfile(user.uid, profileData)
       saveProfile(profileData)
       navigate('/app')
     } catch (err: any) {
@@ -1651,7 +1664,15 @@ function AppShell() {
     let active = true
     fetchUserProfile(userId)
       .then((remoteProfile) => {
-        if (active && remoteProfile) saveProfile(remoteProfile)
+        if (!active) return
+        if (remoteProfile) {
+          saveProfile(remoteProfile)
+          return
+        }
+        const localProfile = getProfile()
+        if (localProfile?.departmentCode) {
+          saveUserProfile(userId, localProfile).catch(() => {})
+        }
       })
       .catch(() => {})
     return () => {
@@ -1859,7 +1880,7 @@ function DashboardPage() {
               : 'Start by picking courses from the catalog.'}
           </p>
         </div>
-        <BrandMark className="hub-hero-mark" label="Engineering Hub" />
+        <BrandMark className="hub-hero-mark" />
       </section>
 
       {/* Analytics */}
@@ -3944,18 +3965,39 @@ function CourseAnalyticsPage() {
 function ProfilePage() {
   const navigate = useNavigate()
   const profile = useProfile()
+  const firebaseUser = useFirebaseUser()
+  const userId = firebaseUser && firebaseUser !== 'loading' ? firebaseUser.uid : null
   const { theme, setTheme, scheme, setScheme, resolved } = useTheme()
   const attempts = readJson<QuizAttempt[]>(ATTEMPTS_KEY, [])
   const [draft, setDraft] = useState<Profile>(() => profile ?? demoProfile('engineer@example.com'))
+  const [saveError, setSaveError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (profile) setDraft(profile)
+  }, [profile])
 
   const totalAttempts = attempts.reduce((s, a) => s + a.total, 0)
   const totalCorrect = attempts.reduce((s, a) => s + a.score, 0)
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setSaveError('')
+    setSaving(true)
     const department = departments.find((d) => d.code === draft.departmentCode)
-    saveProfile({ ...draft, departmentName: department?.name ?? draft.departmentName })
-    navigate('/app')
+    const nextProfile = { ...draft, departmentName: department?.name ?? draft.departmentName }
+    try {
+      if (userId) {
+        await saveUserProfile(userId, nextProfile)
+      }
+      saveProfile(nextProfile)
+      navigate('/app')
+    } catch (err: any) {
+      setSaveError(err?.message || 'Profile saved on this device, but cloud sync failed. Try again.')
+      saveProfile(nextProfile)
+    } finally {
+      setSaving(false)
+    }
   }
 
   function getInitials(first: string, last: string) {
@@ -4092,8 +4134,9 @@ function ProfilePage() {
                 ))}
               </select>
             </label>
-            <button className="primary-button full" type="submit" style={{ marginTop: '1rem' }}>
-              <CheckCircle2 size={18} /> Save profile
+            {saveError && <p className="form-error">{saveError}</p>}
+            <button className="primary-button full" type="submit" style={{ marginTop: '1rem' }} disabled={saving}>
+              <CheckCircle2 size={18} /> {saving ? 'Saving...' : 'Save profile'}
             </button>
           </form>
         </section>
