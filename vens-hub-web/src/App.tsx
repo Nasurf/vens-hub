@@ -1611,7 +1611,6 @@ function useFlashcardDatabaseSync(userId: string | null) {
 }
 
 function AppShell() {
-  const profile = useProfile()
   const firebaseUser = useFirebaseUser()
   const userId = firebaseUser && firebaseUser !== 'loading' ? firebaseUser.uid : null
   const navigate = useNavigate()
@@ -1624,6 +1623,7 @@ function AppShell() {
     { to: '/app/study', label: 'Flashcards', icon: <BookOpen size={22} /> },
     { to: '/app/courses', label: 'Courses', icon: <GraduationCap size={22} /> },
     { to: '/app/streaks', label: 'Streaks', icon: <Flame size={22} /> },
+    { to: '/app/profile', label: 'Profile', icon: <CircleUserRound size={22} /> },
   ]
 
   function signOut() {
@@ -1657,10 +1657,6 @@ function AppShell() {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <NavLink className="profile-chip" onClick={() => setMobileMenuOpen(false)} to="/app/profile">
-            <CircleUserRound />
-            <span>{profile?.firstName ?? 'User'}</span>
-          </NavLink>
           <button onClick={signOut}>
             <LogOut size={18} />
             <span>Sign out</span>

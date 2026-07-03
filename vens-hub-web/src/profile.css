@@ -392,8 +392,34 @@
   opacity: 0;
 }
 @keyframes profileFadeUp {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Micro-interactions (Emil principles) ─── */
+.profile-theme-btn {
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms ease-out, background 160ms ease-out;
+}
+.profile-theme-btn:active {
+  transform: scale(0.96);
+}
+
+.profile-swatch {
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+.profile-swatch:active {
+  transform: scale(0.9);
+}
+
+.profile-course-remove {
+  transition: opacity 160ms ease-out, background 160ms ease-out, color 160ms ease-out, transform 120ms ease-out;
+}
+.profile-course-remove:active {
+  transform: scale(0.88);
+}
+
+.profile-course-item {
+  transition: border-color 160ms ease-out, background 160ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -404,10 +430,103 @@
 
 /* ─── Responsive ─── */
 @media (max-width: 700px) {
-  .profile-stats { grid-template-columns: repeat(2, 1fr); }
-  .profile-two-col { grid-template-columns: 1fr; }
-  .profile-hero h1 { font-size: 1.4rem; }
-  .profile-account-actions { flex-direction: column; }
-  .profile-hero { padding: 2rem 1.25rem; }
-  .profile-avatar-inner { width: 72px; height: 72px; font-size: 1.8rem; }
+  .profile-page {
+    padding: 0 0 max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .profile-hero {
+    padding: clamp(1.5rem, 5vw, 2rem) clamp(1rem, 4vw, 1.5rem);
+    border-radius: 0 0 20px 20px;
+    margin-bottom: 1rem;
+  }
+
+  .profile-avatar-inner {
+    width: 72px;
+    height: 72px;
+    font-size: 1.8rem;
+  }
+
+  .profile-hero h1 {
+    font-size: clamp(1.25rem, 4vw, 1.5rem);
+  }
+
+  .profile-hero .profile-email {
+    font-size: 0.85rem;
+  }
+
+  .profile-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+    padding: 0 1rem;
+  }
+
+  .profile-stat {
+    padding: 1rem 0.5rem;
+    border-radius: 14px;
+  }
+
+  .profile-stat strong {
+    font-size: 1.35rem;
+  }
+
+  .profile-stat span {
+    font-size: 0.68rem;
+  }
+
+  .profile-two-col {
+    grid-template-columns: 1fr;
+    padding: 0 1rem;
+  }
+
+  .profile-card {
+    padding: clamp(1rem, 3vw, 1.25rem);
+    border-radius: 16px;
+    margin-bottom: 0.75rem;
+  }
+
+  .profile-card-header h2 {
+    font-size: 0.95rem;
+  }
+
+  .profile-theme-picker {
+    gap: 0.4rem;
+  }
+
+  .profile-theme-btn {
+    padding: 0.6rem 0.4rem;
+    font-size: 0.78rem;
+    min-height: 44px;
+    border-radius: 10px;
+  }
+
+  .profile-swatch {
+    width: 36px;
+    height: 36px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .profile-course-item {
+    padding: 0.75rem 0.85rem;
+    border-radius: 12px;
+  }
+
+  .profile-course-remove {
+    opacity: 1;
+    width: 36px;
+    height: 36px;
+  }
+
+  .profile-account-actions {
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .profile-account-actions button {
+    min-height: 48px;
+  }
+
+  .profile-danger-btn {
+    border-radius: 12px;
+  }
 }
