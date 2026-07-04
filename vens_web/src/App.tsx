@@ -721,7 +721,7 @@ function getStreakStats(attempts: QuizAttempt[]) {
   }
 }
 
-function BrandMark({ className = '', label = 'Vens Hub' }: { className?: string; label?: string }) {
+function BrandMark({ className = '', label = 'Engineering Hub' }: { className?: string; label?: string }) {
   return <span aria-label={label} className={cx('brand-logo-mask', className)} role="img" />
 }
 
@@ -733,7 +733,7 @@ function Logo({ compact = false, className }: { compact?: boolean; className?: s
       </span>
       {!compact && (
         <span>
-          <strong>Vens Hub</strong>
+          <strong>Engineering Hub</strong>
         </span>
       )}
     </Link>
@@ -760,7 +760,7 @@ function PageHeader({
   )
 }
 
-function LoadingState({ label = 'Loading Vens Hub data...' }: { label?: string }) {
+function LoadingState({ label = 'Loading Engineering Hub data...' }: { label?: string }) {
   return (
     <div className="state-card">
       <span className="loader" />
@@ -1137,7 +1137,7 @@ function LoginPage() {
           Sign in with Google
         </button>
         <p className="auth-switch">
-          New to Vens Hub? <Link to="/register">Create an account</Link>
+          New to Engineering Hub? <Link to="/register">Create an account</Link>
         </p>
       </AuthCard>
     </PublicShell>
@@ -2145,7 +2145,7 @@ function CourseDetailPage() {
         <div>
           <p className="eyebrow">{course.department ?? course.department_code}</p>
           <h1>{course.code}: {course.title}</h1>
-          <p>{course.description || 'Course information is available in Vens Hub.'}</p>
+          <p>{course.description || 'Course information is available in Engineering Hub.'}</p>
           <div className="pill-row">
             {course.units ? <span>{course.units} units</span> : null}
             {courseLevels(course).map((item, itemIndex) => <span key={`${item}-${itemIndex}`}>{item} Level</span>)}
@@ -3143,7 +3143,7 @@ function FlashcardCardUI({
     setAiLoading(true)
     setAiError('')
     try {
-      const prompt = `You are helping a Vens Hub student review a flashcard.
+      const prompt = `You are helping an Engineering Hub student review a flashcard.
 Course: ${a.courseCode} - ${a.courseTitle}
 Topic: ${a.topicName}
 Question: ${a.questionText}
@@ -4478,7 +4478,7 @@ function ProfilePage() {
 function NotFoundPage() {
   return (
     <div className="page-stack narrow">
-      <EmptyState icon={<AlertCircle />} title="Page not found" body="This page is not available in Vens Hub yet." />
+      <EmptyState icon={<AlertCircle />} title="Page not found" body="This page is not available in Engineering Hub yet." />
       <Link className="primary-button" to="/app">Back home</Link>
     </div>
   )

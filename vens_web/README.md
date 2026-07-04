@@ -1,6 +1,6 @@
-# Vens Hub Web
+# Engineering Hub Web
 
-React/Vite migration of the Flutter `vens_hub` app for the hackathon web target.
+React/Vite web app for Engineering Hub.
 
 ## Current scope
 
